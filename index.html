@@ -3,346 +3,1130 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>多网盘索引管理系统</title>
+  <title>多网盘索引管理系统 - 资源管理器风格</title>
   <!-- 引入 Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- 引入 Lucide 图标库 -->
   <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    /* 辅助样式：隐藏折叠状态下的文本 */
+    .collapsed .nav-text,
+    .collapsed .nav-header {
+      display: none !important;
+    }
+    .collapsed .nav-item {
+      justify-content: center !important;
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+    }
+    /* 隐藏面包屑横向滚动条 */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen">
-  <div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+<body class="bg-slate-100 text-slate-800 h-screen flex flex-col font-sans overflow-hidden select-none">
 
-    <!-- 页头标题与顶栏操作 -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-      <div>
-        <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
-          <i data-lucide="hard-drive" class="w-8 h-8 text-indigo-600"></i>
-          多网盘索引管理系统
-        </h1>
-        <p class="text-slate-500 mt-1 text-sm">统一追踪、搜索与管理多网盘文件分布与结构</p>
+  <!-- 顶栏：Win11 资源管理器风格工具栏 -->
+  <header class="bg-white border-b border-slate-200 px-3 sm:px-4 py-2 flex items-center justify-between gap-2 sm:gap-3 shrink-0 shadow-sm">
+    <!-- 左侧：应用标识、返回上一级与可交互面包屑路径 -->
+    <div class="flex items-center gap-1.5 sm:gap-2.5 min-w-0 flex-1">
+      <div class="flex items-center gap-2 pr-2 sm:pr-3 border-r border-slate-200 shrink-0">
+        <i data-lucide="hard-drive" class="w-6 h-6 text-indigo-600"></i>
+        <span class="font-bold text-slate-900 hidden md:inline text-sm">网盘资源管理器</span>
       </div>
 
-      <!-- 右侧按钮组：设置按钮 + 新增下拉控件 -->
-      <div class="flex items-center gap-3">
-        <!-- 设置按钮 -->
-        <button onclick="openModal('settingsModal')" class="p-2.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-all shadow-sm" title="设置">
-          <i data-lucide="settings" class="w-5 h-5"></i>
+      <!-- 返回上一级按钮 -->
+      <button id="upLevelBtn" onclick="goUpOneLevel()" disabled class="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-indigo-600 disabled:opacity-40 disabled:pointer-events-none transition-all shrink-0" title="返回上一级">
+        <i data-lucide="arrow-up" class="w-4 h-4"></i>
+      </button>
+      
+      <!-- 面包屑地址栏 (Breadcrumb) -->
+      <div id="breadcrumbContainer" class="flex items-center gap-1 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 min-w-0 flex-1 max-w-xl text-slate-600 overflow-x-auto whitespace-nowrap no-scrollbar">
+        <!-- 动态渲染层级面包屑 -->
+      </div>
+    </div>
+
+    <!-- 右侧：搜索框、操作按钮与设置 -->
+    <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      <!-- 搜索框 -->
+      <div class="relative w-28 sm:w-60">
+        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
+        <input type="text" id="searchInput" oninput="renderFiles()" placeholder="搜索文件名或备注..." class="w-full pl-8 pr-6 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
+        <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5" title="清空搜索">
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+
+      <!-- 添加新建菜单按钮 -->
+      <div class="relative">
+        <button id="addDropdownBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-2.5 py-1.5 rounded-lg text-xs shadow-sm flex items-center gap-1 transition-all">
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          <span class="hidden sm:inline">新建</span>
+          <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
         </button>
 
-        <!-- 下拉组控件 -->
-        <div class="relative">
-          <button id="addDropdownBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-all">
-            <i data-lucide="plus" class="w-4 h-4"></i>
-            <span>添加</span>
-            <i data-lucide="chevron-down" class="w-4 h-4 ml-1"></i>
+        <!-- 下拉菜单 -->
+        <div id="addDropdownMenu" class="hidden absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-slate-100 py-1.5 z-30">
+          <button onclick="openDriveModal()" class="w-full text-left px-3.5 py-2 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2">
+            <i data-lucide="hard-drive" class="w-4 h-4 text-indigo-500"></i>
+            添加网盘
           </button>
+          <button onclick="openFolderModal()" class="w-full text-left px-3.5 py-2 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2">
+            <i data-lucide="folder-plus" class="w-4 h-4 text-amber-500"></i>
+            添加文件夹
+          </button>
+          <hr class="my-1 border-slate-100">
+          <button onclick="openFileModal()" class="w-full text-left px-3.5 py-2 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2">
+            <i data-lucide="file-plus-2" class="w-4 h-4 text-indigo-500"></i>
+            添加文件
+          </button>
+        </div>
+      </div>
 
-          <!-- 下拉菜单 -->
-          <div id="addDropdownMenu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 py-1.5 z-20">
-            <button onclick="openDriveModal()" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2.5">
-              <i data-lucide="hard-drive" class="w-4 h-4 text-indigo-500"></i>
+      <!-- 设置按钮 -->
+      <button onclick="openSettingsModal()" class="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-all" title="系统设置">
+        <i data-lucide="settings" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- 主内容区：左侧导航栏 + 右侧主工作区 -->
+  <div class="flex-1 flex overflow-hidden">
+
+    <!-- 左侧导航栏 (支持收起/展开，全设备通用) -->
+    <aside id="sidebar" class="w-60 bg-slate-50 border-r border-slate-200 p-2 sm:p-3 flex flex-col justify-between overflow-y-auto shrink-0 transition-all duration-300 ease-in-out">
+      <div class="space-y-4">
+        
+        <!-- 折叠控制顶栏 (放置 < 与 > 按钮) -->
+        <div class="flex items-center justify-between px-1 mb-1">
+          <span class="nav-header text-[11px] font-semibold text-slate-400 uppercase tracking-wider">导航目录</span>
+          <button id="toggleSidebarBtn" onclick="toggleSidebar()" class="p-1.5 rounded-lg hover:bg-slate-200/70 text-slate-500 hover:text-indigo-600 transition-all mx-auto" title="展开/折叠侧边栏">
+            <i id="toggleSidebarIcon" data-lucide="chevron-left" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- 主视图列表 -->
+        <div>
+          <div class="nav-header text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-2 mb-1.5">快速访问</div>
+          <nav class="space-y-1">
+            <button id="navAllFiles" onclick="filterByDrive(null, null)" title="全部文件" class="nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-indigo-50 text-indigo-600 transition-all">
+              <i data-lucide="files" class="w-4 h-4 shrink-0"></i>
+              <span class="nav-text truncate">全部文件</span>
+            </button>
+            <button id="navDriveMgmt" onclick="switchMainTab('drives')" title="网盘管理页" class="nav-item w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-200/60 transition-all">
+              <i data-lucide="layout-dashboard" class="w-4 h-4 shrink-0"></i>
+              <span class="nav-text truncate">网盘管理页</span>
+            </button>
+          </nav>
+        </div>
+
+        <!-- 已注册网盘树形列表 -->
+        <div>
+          <div class="nav-header flex items-center justify-between px-2 mb-1.5">
+            <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">已挂载网盘</span>
+            <button onclick="openDriveModal()" class="text-slate-400 hover:text-indigo-600" title="添加网盘"><i data-lucide="plus" class="w-3.5 h-3.5"></i></button>
+          </div>
+          <nav id="sidebarDriveList" class="space-y-1">
+            <!-- JS 动态渲染网盘树状列表 -->
+          </nav>
+        </div>
+      </div>
+
+      <!-- 底部系统提示 -->
+      <div class="nav-header pt-3 border-t border-slate-200 text-[11px] text-slate-400 px-2 flex items-center gap-1.5">
+        <i data-lucide="monitor" class="w-3.5 h-3.5 shrink-0"></i>
+        <span class="nav-text">本地轻量模式</span>
+      </div>
+    </aside>
+
+    <!-- 右侧工作区 -->
+    <main class="flex-1 bg-white overflow-y-auto flex flex-col min-w-0">
+
+      <!-- 视图 1：文件与文件夹混合列表视图 (Win11 File List UI) -->
+      <div id="viewFiles" class="flex-1 flex flex-col">
+        <div class="overflow-x-auto flex-1">
+          <table class="w-full text-left border-collapse min-w-[580px]">
+            <thead>
+              <tr class="border-b border-slate-200 bg-slate-50/50 text-xs font-medium text-slate-500">
+                <th class="py-2.5 px-4 font-semibold">Name (名称)</th>
+                <th class="py-2.5 px-4 font-semibold w-32 sm:w-36">Type (类型)</th>
+                <th class="py-2.5 px-4 font-semibold w-24 sm:w-28">Size (大小)</th>
+                <th class="py-2.5 px-4 font-semibold w-36 sm:w-48">文件备注</th>
+                <th class="py-2.5 px-4 font-semibold w-20 sm:w-24 text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody id="fileTableBody" class="divide-y divide-slate-100 text-xs text-slate-700">
+              <!-- 动态渲染文件夹与文件记录 -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 底部状态栏 (Status Bar) -->
+        <footer class="h-8 border-t border-slate-200 bg-slate-50 px-4 flex items-center justify-between text-[11px] text-slate-500 shrink-0">
+          <div id="statusBarCount">0 个项目</div>
+          <div id="statusBarSelected" class="hidden sm:block">点击文件夹可进入查看内部文件</div>
+        </footer>
+      </div>
+
+      <!-- 视图 2：网盘管理视图 (Dashboard UI) -->
+      <div id="viewDrives" class="hidden p-4 sm:p-6 space-y-6 flex-1">
+        <!-- 统计指标卡片组 -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center gap-4">
+            <div class="p-3 bg-indigo-100 text-indigo-600 rounded-lg">
+              <i data-lucide="hard-drive" class="w-6 h-6"></i>
+            </div>
+            <div>
+              <p class="text-xs font-semibold text-slate-400 uppercase">已注册网盘</p>
+              <h3 id="statDrives" class="text-xl font-bold text-slate-800 mt-0.5">0 个</h3>
+            </div>
+          </div>
+          <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center gap-4">
+            <div class="p-3 bg-emerald-100 text-emerald-600 rounded-lg">
+              <i data-lucide="file-text" class="w-6 h-6"></i>
+            </div>
+            <div>
+              <p class="text-xs font-semibold text-slate-400 uppercase">已索引文件</p>
+              <h3 id="statFiles" class="text-xl font-bold text-slate-800 mt-0.5">0 个</h3>
+            </div>
+          </div>
+          <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center gap-4">
+            <div class="p-3 bg-amber-100 text-amber-600 rounded-lg">
+              <i data-lucide="pie-chart" class="w-6 h-6"></i>
+            </div>
+            <div>
+              <p class="text-xs font-semibold text-slate-400 uppercase">统计体积</p>
+              <h3 id="statSize" class="text-xl font-bold text-slate-800 mt-0.5">0 B</h3>
+            </div>
+          </div>
+        </div>
+
+        <!-- 网盘清单表格 -->
+        <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <i data-lucide="server" class="w-4 h-4 text-indigo-600"></i>
+              网盘挂载配置
+            </h2>
+            <button onclick="openDriveModal()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs rounded-lg transition-all flex items-center gap-1">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
               添加网盘
             </button>
-            <button onclick="openFolderModal()" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2.5">
-              <i data-lucide="folder-plus" class="w-4 h-4 text-indigo-500"></i>
-              添加文件夹
-            </button>
-
-            <hr class="my-1 border-slate-100">
-            
-            <button onclick="openFileModal()" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2.5">
-              <i data-lucide="file-plus-2" class="w-4 h-4 text-indigo-500"></i>
-              添加文件
-            </button>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tab 页面切换导航栏 -->
-    <nav class="flex gap-2 border-b border-slate-200 mb-6">
-      <button id="tabFilesBtn" onclick="switchTab('files')" class="pb-3 px-4 font-semibold text-indigo-600 border-b-2 border-indigo-600 flex items-center gap-2 transition-all">
-        <i data-lucide="files" class="w-4 h-4"></i>
-        <span>文件列表</span>
-      </button>
-      <button id="tabDrivesBtn" onclick="switchTab('drives')" class="pb-3 px-4 font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-2 transition-all">
-        <i data-lucide="hard-drive-upload" class="w-4 h-4"></i>
-        <span>网盘管理</span>
-      </button>
-    </nav>
-
-    <!-- 视图 1：文件列表视图 -->
-    <div id="viewFiles" class="space-y-6">
-      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div class="p-4 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row gap-4 items-center justify-between">
-          <div class="relative w-full sm:w-96">
-            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
-            <input type="text" id="searchInput" oninput="renderFiles()" placeholder="输入文件名搜索..." class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
-          </div>
-        </div>
-
-        <!-- 表格区域 -->
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
-            <thead>
-              <tr class="bg-slate-50/70 border-b border-slate-100 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                <th class="py-3.5 px-6">文件名称</th>
-                <th class="py-3.5 px-6">文件分类</th>
-                <th class="py-3.5 px-6">容量体积</th>
-                <th class="py-3.5 px-6">存储位置</th>
-                <th class="py-3.5 px-6 text-right">操作</th>
-              </tr>
-            </thead>
-            <tbody id="fileTableBody" class="divide-y divide-slate-100 text-sm">
-              <!-- 动态渲染内容 -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- 视图 2：网盘管理视图 -->
-    <div id="viewDrives" class="hidden space-y-6">
-      <!-- 概览仪表盘（已搬迁至此页面） -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-4">
-          <div class="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-            <i data-lucide="hard-drive" class="w-6 h-6"></i>
-          </div>
-          <div>
-            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">已注册网盘</p>
-            <h3 id="statDrives" class="text-2xl font-bold text-slate-800 mt-0.5">0 个</h3>
-          </div>
-        </div>
-        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-4">
-          <div class="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-            <i data-lucide="file-text" class="w-6 h-6"></i>
-          </div>
-          <div>
-            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">已索引文件</p>
-            <h3 id="statFiles" class="text-2xl font-bold text-slate-800 mt-0.5">0 个</h3>
-          </div>
-        </div>
-        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-4">
-          <div class="p-3 bg-amber-50 text-amber-600 rounded-xl">
-            <i data-lucide="pie-chart" class="w-6 h-6"></i>
-          </div>
-          <div>
-            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">统计体积</p>
-            <h3 id="statSize" class="text-2xl font-bold text-slate-800 mt-0.5">0 B</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-100 text-xs font-medium text-slate-500">
+                  <th class="py-3 px-4">网盘名称</th>
+                  <th class="py-3 px-4">文件夹数量</th>
+                  <th class="py-3 px-4">关联文件数</th>
+                  <th class="py-3 px-4 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody id="driveTableBody" class="divide-y divide-slate-100 text-xs text-slate-700">
+                <!-- 动态渲染 -->
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
 
-      <!-- 已注册网盘列表卡片 -->
-      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div class="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between">
-          <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
-            <i data-lucide="server" class="w-5 h-5 text-indigo-600"></i>
-            网盘列表
-          </h2>
-          <button onclick="openDriveModal()" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-medium text-xs rounded-lg transition-all flex items-center gap-1">
-            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-            新增网盘
-          </button>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
-            <thead>
-              <tr class="bg-slate-50/70 border-b border-slate-100 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                <th class="py-3.5 px-6">网盘名称</th>
-                <th class="py-3.5 px-6">文件夹数量</th>
-                <th class="py-3.5 px-6">关联文件数</th>
-                <th class="py-3.5 px-6 text-right">操作</th>
-              </tr>
-            </thead>
-            <tbody id="driveTableBody" class="divide-y divide-slate-100 text-sm">
-              <!-- 动态渲染网盘列表 -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+    </main>
   </div>
 
-  <!-- 模态框：设置弹窗 -->
+  <!-- 隐藏的 JSON 备份文件选择器 -->
+  <input type="file" id="importJsonInput" accept=".json,application/json" class="hidden" onchange="handleImportJsonFile(event)" />
+
+  <!-- 模态框：系统设置弹窗 -->
   <div id="settingsModal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
           <i data-lucide="settings" class="w-5 h-5 text-indigo-600"></i>
           系统设置
         </h3>
-        <button onclick="closeModal('settingsModal')" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
-          <i data-lucide="x" class="w-5 h-5"></i>
+        <button onclick="closeModal('settingsModal')" class="text-slate-400 hover:text-slate-600 p-1">
+          <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
 
       <div class="space-y-4">
+        <!-- 文件后缀名管理 -->
         <div>
           <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">文件后缀名管理</label>
-          <select id="extManagementSelect" class="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white">
+          <select id="extManagementSelect" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white">
             <option value="auto">自动识别扩展名 (默认)</option>
             <option value="custom">自定义映射分类 (预留功能)</option>
             <option value="ignore">忽略无扩展名文件 (预留功能)</option>
           </select>
-          <p class="text-xs text-slate-400 mt-1.5">说明：此下拉选项为预留界面控件，暂时不含实际功能。</p>
+          <p class="text-[11px] text-slate-400 mt-1.5">说明：此下拉选项为预留界面控件，暂无实际功能。</p>
+        </div>
+
+        <!-- 导入/导出备份下拉折叠选项 -->
+        <div class="pt-3 border-t border-slate-100">
+          <div class="border border-slate-200 bg-slate-50/70 rounded-xl overflow-hidden">
+            <button type="button" onclick="toggleBackupZone()" class="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-bold text-slate-700 hover:bg-slate-100/80 transition-colors">
+              <span class="flex items-center gap-1.5">
+                <i data-lucide="database" class="w-4 h-4 text-indigo-600"></i>
+                <span>导入/导出备份</span>
+              </span>
+              <i id="backupZoneChevron" data-lucide="chevron-down" class="w-4 h-4 text-slate-500 transition-transform duration-200"></i>
+            </button>
+            <div id="backupZoneContent" class="hidden px-3.5 pb-3.5 pt-2.5 border-t border-slate-200 bg-white space-y-3">
+              <!-- 导出备份 -->
+              <div>
+                <div class="text-[11px] font-semibold text-slate-500 mb-1.5">导出备份</div>
+                <div class="grid grid-cols-2 gap-2">
+                  <button type="button" onclick="exportBackupJson()" class="py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 transition-all">
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                    <span>导出JSON</span>
+                  </button>
+                  <button type="button" onclick="exportBackupCsv()" class="py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 transition-all">
+                    <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
+                    <span>导出CSV</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 导入备份 -->
+              <div class="pt-2 border-t border-slate-100">
+                <div class="text-[11px] font-semibold text-slate-500 mb-1.5">导入备份</div>
+                <button type="button" onclick="triggerImportJson()" class="w-full py-2 px-3 bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-all">
+                  <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                  <span>导入JSON</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 危险区下拉折叠选项 -->
+        <div class="pt-1">
+          <div class="border border-rose-400 bg-rose-50/80 rounded-xl overflow-hidden shadow-sm shadow-rose-500/5">
+            <button type="button" onclick="toggleDangerZone()" class="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-bold text-rose-600 hover:bg-rose-100/80 transition-colors">
+              <span class="flex items-center gap-1.5">
+                <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-600"></i>
+                <span>危险区</span>
+              </span>
+              <i id="dangerZoneChevron" data-lucide="chevron-down" class="w-4 h-4 text-rose-600 transition-transform duration-200"></i>
+            </button>
+            <div id="dangerZoneContent" class="hidden px-3.5 pb-3.5 pt-2.5 border-t border-rose-200 bg-rose-50 space-y-2.5">
+              <p class="text-[11px] text-rose-600 leading-relaxed">
+                高危操作：执行清空将永久删除所有网盘、文件夹及文件索引数据。
+              </p>
+              <button type="button" onclick="openClearDataConfirm()" class="w-full py-2 px-3 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-xs rounded-lg shadow-sm shadow-rose-600/30 flex items-center justify-center gap-1.5 transition-all">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                <span>删除已有的数据</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="mt-6 flex justify-end gap-3">
-        <button onclick="closeModal('settingsModal')" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-all">关闭</button>
+      <div class="mt-6 flex justify-end">
+        <button onclick="closeModal('settingsModal')" class="px-4 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg">关闭</button>
       </div>
     </div>
   </div>
 
-  <!-- 模态框 1：添加/编辑网盘 -->
+  <!-- 模态框：导入 JSON 三选项确认弹窗 -->
+  <div id="importConfirmModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl relative border border-slate-200">
+      <div class="flex items-center gap-3 mb-3">
+        <div class="p-2.5 bg-amber-100 text-amber-600 rounded-xl shrink-0">
+          <i data-lucide="alert-circle" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-slate-900">导入备份确认</h3>
+          <p id="importSummaryText" class="text-[11px] text-slate-500">已解析备份文件</p>
+        </div>
+      </div>
+
+      <div class="bg-amber-50/80 border border-amber-200 rounded-xl p-3 mb-5 text-xs text-slate-700 leading-relaxed">
+        <p class="font-semibold text-amber-900 mb-1">这举动将把原有数据覆盖，是否继续？</p>
+        <p class="text-[11px] text-slate-600">
+          选择<strong class="text-rose-600">“继续”</strong>将清空并覆盖当前所有数据；选择<strong class="text-indigo-600">“添加内容”</strong>将保留原有数据并合并导入（重名网盘或同目录重名文件将自动编号）。
+        </p>
+      </div>
+
+      <div class="flex items-center justify-end gap-2">
+        <button type="button" onclick="cancelImportBackup()" class="px-3.5 py-2 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all">
+          取消
+        </button>
+        <button type="button" onclick="executeImportAppend()" class="px-3.5 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm transition-all">
+          添加内容
+        </button>
+        <button type="button" onclick="executeImportOverwrite()" class="px-3.5 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm transition-all">
+          继续
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 模态框：清空数据红色警示二次确认弹窗 -->
+  <div id="clearDataConfirmModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+    <div class="bg-white border-2 border-rose-500 rounded-2xl max-w-sm w-full p-6 shadow-2xl relative">
+      <div class="flex items-center gap-3 mb-3">
+        <div class="p-2.5 bg-rose-100 text-rose-600 rounded-xl shrink-0">
+          <i data-lucide="shield-alert" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-extrabold text-rose-600">确认删除已有的数据？</h3>
+          <p class="text-[11px] font-semibold text-rose-500">危险操作 · 无法恢复</p>
+        </div>
+      </div>
+
+      <div class="bg-rose-50 border border-rose-200 rounded-xl p-3 mb-5 text-xs text-rose-800 leading-relaxed">
+        此操作将立即清空本地存储中的<strong class="font-bold text-rose-600">所有已注册网盘、文件夹层级及文件索引</strong>。清空后数据将无法找回，确定要继续吗？
+      </div>
+
+      <div class="flex justify-end gap-2.5">
+        <button type="button" onclick="closeModal('clearDataConfirmModal')" class="px-4 py-2 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all">
+          取消
+        </button>
+        <button type="button" onclick="confirmClearAllData()" class="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-xl shadow-md shadow-rose-600/30 flex items-center gap-1.5 transition-all">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          <span>确认删除</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 模态框 1：添加网盘 -->
   <div id="driveModal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
-      <h3 id="driveModalTitle" class="text-xl font-bold text-slate-900 mb-4">添加网盘</h3>
-      <input type="hidden" id="editDriveId">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl relative">
+      <h3 class="text-base font-bold text-slate-900 mb-4">添加网盘</h3>
       <div class="space-y-4">
         <div>
           <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">网盘名称</label>
-          <input type="text" id="driveNameInput" placeholder="例: Google Drive #1" class="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+          <input type="text" id="driveNameInput" placeholder="例: Google Drive #1" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
         </div>
       </div>
-      <div class="mt-6 flex justify-end gap-3">
-        <button onclick="closeModal('driveModal')" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">取消</button>
-        <button onclick="saveDrive()" class="px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm">保存</button>
+      <div class="mt-6 flex justify-end gap-2">
+        <button onclick="closeModal('driveModal')" class="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
+        <button onclick="saveDrive()" class="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">保存</button>
       </div>
     </div>
   </div>
 
-  <!-- 模态框 2：添加文件夹 -->
+  <!-- 模态框 2：添加/编辑文件夹 -->
   <div id="folderModal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
-      <h3 class="text-xl font-bold text-slate-900 mb-4">添加文件夹</h3>
-      <div class="space-y-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl relative">
+      <h3 id="folderModalTitle" class="text-base font-bold text-slate-900 mb-4">添加文件夹</h3>
+      <input type="hidden" id="editFolderId">
+      <div class="space-y-3">
         <div>
-          <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">选择目标网盘</label>
-          <select id="folderDriveSelect" class="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"></select>
+          <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">目标网盘</label>
+          <select id="folderDriveSelect" onchange="updateFolderParentOptions()" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"></select>
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">父级文件夹 (可选根目录)</label>
-          <select id="folderParentSelect" class="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"></select>
+          <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">父级文件夹</label>
+          <select id="folderParentSelect" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"></select>
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">新文件夹名称</label>
-          <input type="text" id="folderNameInput" placeholder="例: documents" class="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+          <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">文件夹名称</label>
+          <input type="text" id="folderNameInput" placeholder="例: Documents" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
         </div>
       </div>
-      <div class="mt-6 flex justify-end gap-3">
-        <button onclick="closeModal('folderModal')" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">取消</button>
-        <button onclick="saveFolder()" class="px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm">保存</button>
+      <div class="mt-6 flex justify-end gap-2">
+        <button onclick="closeModal('folderModal')" class="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
+        <button onclick="saveFolder()" class="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">保存</button>
       </div>
     </div>
   </div>
 
   <!-- 模态框 3：添加/编辑文件 -->
   <div id="fileModal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
-      <h3 id="fileModalTitle" class="text-xl font-bold text-slate-900 mb-4">添加文件</h3>
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl relative">
+      <h3 id="fileModalTitle" class="text-base font-bold text-slate-900 mb-4">添加文件</h3>
       <input type="hidden" id="editFileId">
-      <div class="space-y-4">
+      <div class="space-y-3">
         <div>
-          <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">文件名称 (含后缀)</label>
-          <input type="text" id="fileNameInput" placeholder="例: report.pdf" class="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+          <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">文件名 (含后缀)</label>
+          <input type="text" id="fileNameInput" placeholder="例: report.pdf" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">文件体积 (KB/MB/GB/TB)</label>
-          <input type="text" id="fileSizeInput" placeholder="例: 15.5 MB" class="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+          <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">文件体积</label>
+          <input type="text" id="fileSizeInput" placeholder="例: 15.5 MB" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">所属网盘</label>
-          <select id="fileDriveSelect" onchange="updateFileFolderOptions()" class="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"></select>
+          <select id="fileDriveSelect" onchange="updateFileFolderOptions()" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"></select>
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">存放路径</label>
-          <select id="fileFolderSelect" class="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"></select>
+          <select id="fileFolderSelect" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"></select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">文件备注 (选填)</label>
+          <input type="text" id="fileNoteInput" placeholder="例: 2026年度最终版备份" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
         </div>
       </div>
-      <div class="mt-6 flex justify-end gap-3">
-        <button onclick="closeModal('fileModal')" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">取消</button>
-        <button onclick="saveFile()" class="px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm">保存</button>
+      <div class="mt-6 flex justify-end gap-2">
+        <button onclick="closeModal('fileModal')" class="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
+        <button onclick="saveFile()" class="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">保存</button>
       </div>
     </div>
   </div>
 
   <script>
-    // 数据持久化中心
+    // 数据持久化
     let drives = JSON.parse(localStorage.getItem('mc_drives_v2')) || [];
     let folders = JSON.parse(localStorage.getItem('mc_folders_v2')) || [];
     let files = JSON.parse(localStorage.getItem('mc_files_v2')) || [];
 
-    // 初始化运行
+    // 当前视图与层级导航状态
+    let currentMainTab = 'files'; // 'files' | 'drives'
+    let currentSelectedDriveId = null; // null 代表所有网盘根目录
+    let currentSelectedFolderId = null; // null 代表当前网盘根目录
+    let isSidebarCollapsed = false;
+
+    // 待处理的导入备份暂存数据
+    let pendingBackupData = null;
+
+    // HTML 转义助手
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // 生成唯一 ID
+    function generateUniqueId() {
+      return Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+    }
+
+    // 初始化
     document.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
+      renderSidebarDrives();
+      renderBreadcrumb();
       renderStats();
       renderFiles();
-      renderDrives();
+      renderDriveTable();
       initDropdown();
     });
 
-    // Tab 页面切换逻辑
-    function switchTab(tab) {
-      const viewFiles = document.getElementById('viewFiles');
-      const viewDrives = document.getElementById('viewDrives');
-      const tabFilesBtn = document.getElementById('tabFilesBtn');
-      const tabDrivesBtn = document.getElementById('tabDrivesBtn');
+    // 切换侧边栏折叠/展开
+    function toggleSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      const icon = document.getElementById('toggleSidebarIcon');
 
-      if (tab === 'files') {
-        viewFiles.classList.remove('hidden');
-        viewDrives.classList.add('hidden');
+      isSidebarCollapsed = !isSidebarCollapsed;
 
-        tabFilesBtn.className = 'pb-3 px-4 font-semibold text-indigo-600 border-b-2 border-indigo-600 flex items-center gap-2 transition-all';
-        tabDrivesBtn.className = 'pb-3 px-4 font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-2 transition-all';
+      if (isSidebarCollapsed) {
+        sidebar.classList.remove('w-60');
+        sidebar.classList.add('w-14', 'collapsed');
+        icon.setAttribute('data-lucide', 'chevron-right');
       } else {
-        viewFiles.classList.add('hidden');
-        viewDrives.classList.remove('hidden');
-
-        tabDrivesBtn.className = 'pb-3 px-4 font-semibold text-indigo-600 border-b-2 border-indigo-600 flex items-center gap-2 transition-all';
-        tabFilesBtn.className = 'pb-3 px-4 font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-2 transition-all';
+        sidebar.classList.remove('w-14', 'collapsed');
+        sidebar.classList.add('w-60');
+        icon.setAttribute('data-lucide', 'chevron-left');
       }
+
       lucide.createIcons();
     }
 
-    // 存储更新
+    // 存储同步与全量更新
     function syncStorage() {
       localStorage.setItem('mc_drives_v2', JSON.stringify(drives));
       localStorage.setItem('mc_folders_v2', JSON.stringify(folders));
       localStorage.setItem('mc_files_v2', JSON.stringify(files));
+      renderSidebarDrives();
+      renderBreadcrumb();
       renderStats();
       renderFiles();
-      renderDrives();
+      renderDriveTable();
     }
 
-    // 初始化控件与事件
+    // 初始化下拉控制
     function initDropdown() {
       const btn = document.getElementById('addDropdownBtn');
       const menu = document.getElementById('addDropdownMenu');
-
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         menu.classList.toggle('hidden');
       });
+      document.addEventListener('click', () => menu.classList.add('hidden'));
+    }
 
-      document.addEventListener('click', () => {
-        menu.classList.add('hidden');
+    // 打开系统设置弹窗（默认折叠所有子面板）
+    function openSettingsModal() {
+      document.getElementById('backupZoneContent').classList.add('hidden');
+      document.getElementById('backupZoneChevron').classList.remove('rotate-180');
+      document.getElementById('dangerZoneContent').classList.add('hidden');
+      document.getElementById('dangerZoneChevron').classList.remove('rotate-180');
+      openModal('settingsModal');
+    }
+
+    // 展开/收起设置中的“导入/导出备份”
+    function toggleBackupZone() {
+      const content = document.getElementById('backupZoneContent');
+      const chevron = document.getElementById('backupZoneChevron');
+      content.classList.toggle('hidden');
+      chevron.classList.toggle('rotate-180');
+    }
+
+    // 展开/收起设置中的“危险区”
+    function toggleDangerZone() {
+      const content = document.getElementById('dangerZoneContent');
+      const chevron = document.getElementById('dangerZoneChevron');
+      content.classList.toggle('hidden');
+      chevron.classList.toggle('rotate-180');
+    }
+
+    // ==========================================
+    // 导入 / 导出备份逻辑
+    // ==========================================
+
+    // 触发下载辅助函数
+    function triggerDownload(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // 获取当前日期字符串 YYYY-MM-DD
+    function getDateStamp() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    // 1. 导出 JSON 完整备份
+    function exportBackupJson() {
+      const payload = {
+        app: '多网盘索引管理系统',
+        version: '2.0',
+        exportedAt: new Date().toISOString(),
+        drives: drives,
+        folders: folders,
+        files: files
+      };
+      const jsonStr = JSON.stringify(payload, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+      triggerDownload(blob, `multidrive-backup-${getDateStamp()}.json`);
+    }
+
+    // 2. 导出 CSV 扁平报表（带 UTF-8 BOM）
+    function exportBackupCsv() {
+      const escapeCsv = (val) => {
+        const str = val == null ? '' : String(val);
+        if (/[",\r\n]/.test(str)) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      const headers = ['名称', '类型', '大小', '存储路径', '文件备注'];
+      const rows = [headers.map(escapeCsv).join(',')];
+
+      // 导出文件夹行
+      folders.forEach(folder => {
+        const row = [
+          folder.name,
+          'File folder',
+          '-',
+          getFullFolderPath(folder),
+          '-'
+        ];
+        rows.push(row.map(escapeCsv).join(','));
       });
+
+      // 导出文件行
+      files.forEach(file => {
+        const row = [
+          file.name,
+          getFileCategory(file.name),
+          file.size || '-',
+          getFullFilePath(file),
+          file.note || ''
+        ];
+        rows.push(row.map(escapeCsv).join(','));
+      });
+
+      // 添加 UTF-8 BOM 确保 Excel / WPS 中文无乱码
+      const csvContent = '\uFEFF' + rows.join('\r\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      triggerDownload(blob, `multidrive-export-${getDateStamp()}.csv`);
     }
 
-    // 后缀名自动分析
-    function getFileCategory(filename) {
-      if (!filename) return 'file';
-      const parts = filename.split('.');
-      if (parts.length > 1 && parts[parts.length - 1].trim() !== '') {
-        return `${parts[parts.length - 1].toLowerCase()} file`;
+    // 3. 唤起 JSON 文件选择
+    function triggerImportJson() {
+      const input = document.getElementById('importJsonInput');
+      input.value = '';
+      input.click();
+    }
+
+    // 4. 读取并校验上传的 JSON 备份
+    function handleImportJsonFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (
+            !parsed ||
+            !Array.isArray(parsed.drives) ||
+            !Array.isArray(parsed.folders) ||
+            !Array.isArray(parsed.files)
+          ) {
+            alert('无效的备份文件格式，请选择本系统导出的 JSON 备份文件。');
+            return;
+          }
+
+          pendingBackupData = {
+            drives: parsed.drives,
+            folders: parsed.folders,
+            files: parsed.files
+          };
+
+          document.getElementById('importSummaryText').innerText =
+            `包含 ${parsed.drives.length} 个网盘、${parsed.folders.length} 个文件夹、${parsed.files.length} 个文件`;
+
+          openModal('importConfirmModal');
+        } catch (err) {
+          alert('JSON 文件解析失败，请检查文件是否损坏。');
+        }
+      };
+      reader.readAsText(file, 'utf-8');
+    }
+
+    // 取消导入
+    function cancelImportBackup() {
+      pendingBackupData = null;
+      closeModal('importConfirmModal');
+    }
+
+    // 覆盖现有数据（点击“继续”）
+    function executeImportOverwrite() {
+      if (!pendingBackupData) return;
+
+      drives = pendingBackupData.drives.map(d => ({
+        id: String(d.id || generateUniqueId()),
+        name: String(d.name || '未命名网盘')
+      }));
+
+      const validDriveIds = new Set(drives.map(d => d.id));
+
+      folders = pendingBackupData.folders
+        .filter(f => validDriveIds.has(String(f.driveId)))
+        .map(f => ({
+          id: String(f.id || generateUniqueId()),
+          driveId: String(f.driveId),
+          parentId: f.parentId ? String(f.parentId) : null,
+          name: String(f.name || '未命名文件夹')
+        }));
+
+      const validFolderIds = new Set(folders.map(f => f.id));
+
+      files = pendingBackupData.files
+        .filter(f => validDriveIds.has(String(f.driveId)))
+        .map(f => ({
+          id: String(f.id || generateUniqueId()),
+          name: String(f.name || '未命名文件'),
+          size: f.size ? String(f.size) : '',
+          driveId: String(f.driveId),
+          folderId: (f.folderId && validFolderIds.has(String(f.folderId))) ? String(f.folderId) : null,
+          note: f.note ? String(f.note) : ''
+        }));
+
+      pendingBackupData = null;
+      currentSelectedDriveId = null;
+      currentSelectedFolderId = null;
+      document.getElementById('searchInput').value = '';
+
+      closeModal('importConfirmModal');
+      closeModal('settingsModal');
+      switchMainTab('files');
+      syncStorage();
+    }
+
+    // 获取不重名的网盘名称（重名则自动追加 #1, #2...）
+    function getUniqueDriveName(baseName, targetDriveList) {
+      const existingNames = new Set(targetDriveList.map(d => d.name));
+      if (!existingNames.has(baseName)) return baseName;
+      let counter = 1;
+      while (existingNames.has(`${baseName} #${counter}`)) {
+        counter++;
       }
-      return 'unknown file';
+      return `${baseName} #${counter}`;
     }
 
-    // 容量单位解析计算
+    // 获取同一文件夹内不重名的文件名称（重名则自动追加 #1, #2...）
+    function getUniqueFileName(baseName, driveId, folderId, targetFileList) {
+      const normalizedFolderId = folderId || null;
+      const existingNames = new Set(
+        targetFileList
+          .filter(f => f.driveId === driveId && (f.folderId || null) === normalizedFolderId)
+          .map(f => f.name)
+      );
+      if (!existingNames.has(baseName)) return baseName;
+      let counter = 1;
+      while (existingNames.has(`${baseName} #${counter}`)) {
+        counter++;
+      }
+      return `${baseName} #${counter}`;
+    }
+
+    // 合并添加数据（点击“添加内容”）
+    function executeImportAppend() {
+      if (!pendingBackupData) return;
+
+      const updatedDrives = [...drives];
+      const updatedFolders = [...folders];
+      const updatedFiles = [...files];
+
+      const driveIdMap = new Map();
+      const folderIdMap = new Map();
+
+      // 1. 合并网盘并处理重名编号
+      pendingBackupData.drives.forEach(d => {
+        const oldId = String(d.id);
+        const newId = generateUniqueId();
+        driveIdMap.set(oldId, newId);
+
+        const rawName = String(d.name || '未命名网盘').trim() || '未命名网盘';
+        const uniqueName = getUniqueDriveName(rawName, updatedDrives);
+        updatedDrives.push({ id: newId, name: uniqueName });
+      });
+
+      // 2. 第一遍生成文件夹新 ID 映射
+      const validImportedFolders = pendingBackupData.folders.filter(f => driveIdMap.has(String(f.driveId)));
+      validImportedFolders.forEach(f => {
+        const oldId = String(f.id);
+        folderIdMap.set(oldId, generateUniqueId());
+      });
+
+      // 3. 第二遍重建文件夹父子层级归属
+      validImportedFolders.forEach(f => {
+        const newId = folderIdMap.get(String(f.id));
+        const newDriveId = driveIdMap.get(String(f.driveId));
+        const newParentId = (f.parentId && folderIdMap.has(String(f.parentId)))
+          ? folderIdMap.get(String(f.parentId))
+          : null;
+
+        updatedFolders.push({
+          id: newId,
+          driveId: newDriveId,
+          parentId: newParentId,
+          name: String(f.name || '未命名文件夹').trim() || '未命名文件夹'
+        });
+      });
+
+      // 4. 合并文件并处理同文件夹内的重名编号
+      pendingBackupData.files.forEach(f => {
+        const newDriveId = driveIdMap.get(String(f.driveId));
+        if (!newDriveId) return;
+
+        const newFolderId = (f.folderId && folderIdMap.has(String(f.folderId)))
+          ? folderIdMap.get(String(f.folderId))
+          : null;
+
+        const rawFileName = String(f.name || '未命名文件').trim() || '未命名文件';
+        const uniqueFileName = getUniqueFileName(rawFileName, newDriveId, newFolderId, updatedFiles);
+
+        updatedFiles.push({
+          id: generateUniqueId(),
+          name: uniqueFileName,
+          size: f.size ? String(f.size) : '',
+          driveId: newDriveId,
+          folderId: newFolderId,
+          note: f.note ? String(f.note) : ''
+        });
+      });
+
+      drives = updatedDrives;
+      folders = updatedFolders;
+      files = updatedFiles;
+      pendingBackupData = null;
+
+      closeModal('importConfirmModal');
+      closeModal('settingsModal');
+      syncStorage();
+    }
+
+    // ==========================================
+    // 危险区清空数据逻辑
+    // ==========================================
+
+    // 打开清空数据二次确认弹窗
+    function openClearDataConfirm() {
+      openModal('clearDataConfirmModal');
+    }
+
+    // 确认清空所有已有数据
+    function confirmClearAllData() {
+      drives = [];
+      folders = [];
+      files = [];
+      currentSelectedDriveId = null;
+      currentSelectedFolderId = null;
+      document.getElementById('searchInput').value = '';
+
+      localStorage.removeItem('mc_drives_v2');
+      localStorage.removeItem('mc_folders_v2');
+      localStorage.removeItem('mc_files_v2');
+
+      closeModal('clearDataConfirmModal');
+      closeModal('settingsModal');
+      switchMainTab('files');
+      syncStorage();
+    }
+
+    // ==========================================
+    // 视图切换与层级导航逻辑
+    // ==========================================
+
+    function switchMainTab(tab) {
+      currentMainTab = tab;
+      const viewFiles = document.getElementById('viewFiles');
+      const viewDrives = document.getElementById('viewDrives');
+      const navAllFiles = document.getElementById('navAllFiles');
+      const navDriveMgmt = document.getElementById('navDriveMgmt');
+
+      if (tab === 'files') {
+        viewFiles.classList.remove('hidden');
+        viewDrives.classList.add('hidden');
+        navDriveMgmt.classList.remove('bg-indigo-50', 'text-indigo-600');
+        navDriveMgmt.classList.add('text-slate-600');
+
+        if (currentSelectedDriveId === null) {
+          navAllFiles.classList.add('bg-indigo-50', 'text-indigo-600');
+          navAllFiles.classList.remove('text-slate-600');
+        } else {
+          navAllFiles.classList.remove('bg-indigo-50', 'text-indigo-600');
+          navAllFiles.classList.add('text-slate-600');
+        }
+      } else {
+        viewFiles.classList.add('hidden');
+        viewDrives.classList.remove('hidden');
+        navDriveMgmt.classList.add('bg-indigo-50', 'text-indigo-600');
+        navDriveMgmt.classList.remove('text-slate-600');
+        navAllFiles.classList.remove('bg-indigo-50', 'text-indigo-600');
+        navAllFiles.classList.add('text-slate-600');
+      }
+
+      renderSidebarDrives();
+      renderBreadcrumb();
+      lucide.createIcons();
+    }
+
+    // 按网盘与文件夹层级导航
+    function filterByDrive(driveId, folderId = null) {
+      currentSelectedDriveId = driveId;
+      currentSelectedFolderId = folderId;
+
+      const searchInput = document.getElementById('searchInput');
+      if (searchInput.value) {
+        searchInput.value = '';
+      }
+
+      switchMainTab('files');
+      renderFiles();
+    }
+
+    // 点击表格中的文件夹进入内部
+    function enterFolder(folderId) {
+      const folder = folders.find(f => f.id === folderId);
+      if (!folder) return;
+      filterByDrive(folder.driveId, folder.id);
+    }
+
+    // 返回上一级目录
+    function goUpOneLevel() {
+      if (currentMainTab !== 'files') return;
+
+      const searchInput = document.getElementById('searchInput');
+      if (searchInput.value.trim()) {
+        clearSearch();
+        return;
+      }
+
+      if (currentSelectedFolderId) {
+        const currentFolder = folders.find(f => f.id === currentSelectedFolderId);
+        if (currentFolder && currentFolder.parentId) {
+          filterByDrive(currentFolder.driveId, currentFolder.parentId);
+        } else if (currentFolder) {
+          filterByDrive(currentFolder.driveId, null);
+        } else {
+          filterByDrive(currentSelectedDriveId, null);
+        }
+      } else if (currentSelectedDriveId) {
+        filterByDrive(null, null);
+      }
+    }
+
+    // 清空搜索框
+    function clearSearch() {
+      document.getElementById('searchInput').value = '';
+      renderFiles();
+    }
+
+    // 获取从顶层到当前文件夹的完整祖先链
+    function getFolderChain(folderId) {
+      const chain = [];
+      let currId = folderId;
+      const visited = new Set();
+      while (currId && !visited.has(currId)) {
+        visited.add(currId);
+        const folder = folders.find(f => f.id === currId);
+        if (!folder) break;
+        chain.unshift(folder);
+        currId = folder.parentId;
+      }
+      return chain;
+    }
+
+    // 渲染顶部面包屑路径与返回按钮状态
+    function renderBreadcrumb() {
+      const container = document.getElementById('breadcrumbContainer');
+      const upBtn = document.getElementById('upLevelBtn');
+
+      if (currentMainTab === 'drives') {
+        upBtn.disabled = true;
+        container.innerHTML = `
+          <i data-lucide="layout-dashboard" class="w-4 h-4 text-indigo-600 shrink-0"></i>
+          <span class="font-medium text-slate-800">网盘管理看板</span>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      const isAtTopRoot = (currentSelectedDriveId === null && currentSelectedFolderId === null);
+      upBtn.disabled = isAtTopRoot;
+
+      let parts = [];
+
+      if (currentSelectedDriveId === null) {
+        parts.push(`
+          <span class="flex items-center gap-1 font-medium text-slate-800 shrink-0">
+            <i data-lucide="folder-open" class="w-4 h-4 text-amber-500 shrink-0"></i>
+            <span>所有网盘 (根目录)</span>
+          </span>
+        `);
+      } else {
+        parts.push(`
+          <button onclick="filterByDrive(null, null)" class="flex items-center gap-1 text-slate-500 hover:text-indigo-600 transition-colors shrink-0" title="返回全部网盘">
+            <i data-lucide="hard-drive" class="w-3.5 h-3.5 text-indigo-500 shrink-0"></i>
+            <span>全部网盘</span>
+          </button>
+        `);
+
+        const drive = drives.find(d => d.id === currentSelectedDriveId);
+        const driveName = drive ? escapeHtml(drive.name) : '未知网盘';
+        const chain = currentSelectedFolderId ? getFolderChain(currentSelectedFolderId) : [];
+
+        parts.push(`<i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>`);
+
+        if (chain.length === 0) {
+          parts.push(`<span class="font-semibold text-slate-800 shrink-0">${driveName}</span>`);
+        } else {
+          parts.push(`
+            <button onclick="filterByDrive('${currentSelectedDriveId}', null)" class="text-slate-600 hover:text-indigo-600 transition-colors shrink-0">
+              ${driveName}
+            </button>
+          `);
+
+          chain.forEach((folder, idx) => {
+            parts.push(`<i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>`);
+            const isLast = idx === chain.length - 1;
+            if (isLast) {
+              parts.push(`<span class="font-semibold text-slate-800 shrink-0">${escapeHtml(folder.name)}</span>`);
+            } else {
+              parts.push(`
+                <button onclick="filterByDrive('${folder.driveId}', '${folder.id}')" class="text-slate-600 hover:text-indigo-600 transition-colors shrink-0">
+                  ${escapeHtml(folder.name)}
+                </button>
+              `);
+            }
+          });
+        }
+      }
+
+      container.innerHTML = parts.join('');
+      container.scrollLeft = container.scrollWidth;
+      lucide.createIcons();
+    }
+
+    // 渲染左侧网盘列表
+    function renderSidebarDrives() {
+      const list = document.getElementById('sidebarDriveList');
+      if (drives.length === 0) {
+        list.innerHTML = `<div class="nav-text text-[11px] text-slate-400 px-2 py-1">暂无网盘</div>`;
+        return;
+      }
+
+      list.innerHTML = drives.map(drive => {
+        const isActive = (currentMainTab === 'files' && currentSelectedDriveId === drive.id);
+        const activeClass = isActive 
+          ? 'bg-indigo-50 text-indigo-600 font-semibold' 
+          : 'text-slate-600 hover:bg-slate-200/60';
+
+        return `
+          <button onclick="filterByDrive('${drive.id}', null)" title="${escapeHtml(drive.name)}" class="nav-item w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all ${activeClass}">
+            <div class="flex items-center gap-2 truncate">
+              <i data-lucide="hard-drive" class="w-3.5 h-3.5 shrink-0 ${isActive ? 'text-indigo-600' : 'text-slate-400'}"></i>
+              <span class="nav-text truncate">${escapeHtml(drive.name)}</span>
+            </div>
+            <i data-lucide="chevron-right" class="nav-text w-3 h-3 text-slate-300"></i>
+          </button>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    // 剥离重名自动追加的 " #数字" 后缀以便正确识别扩展名
+    function stripDuplicateSuffix(filename) {
+      return String(filename).replace(/\s+#\d+$/, '');
+    }
+
+    // 后缀自动推断
+    function getFileCategory(filename) {
+      if (!filename) return 'File';
+      const cleanName = stripDuplicateSuffix(filename);
+      const parts = cleanName.split('.');
+      if (parts.length > 1 && parts[parts.length - 1].trim() !== '') {
+        const ext = parts[parts.length - 1].toLowerCase();
+        if (['exe', 'msi', 'bat'].includes(ext)) return 'Application';
+        if (['txt', 'md', 'doc', 'docx', 'pdf'].includes(ext)) return `${ext.toUpperCase()} Document`;
+        if (['jpg', 'png', 'gif', 'svg', 'webp'].includes(ext)) return 'Image File';
+        return `${ext.toUpperCase()} File`;
+      }
+      return 'File';
+    }
+
+    // 图标匹配助手
+    function getFileIcon(filename) {
+      const cleanName = stripDuplicateSuffix(filename);
+      const ext = cleanName.split('.').pop()?.toLowerCase();
+      if (['exe', 'app'].includes(ext)) return 'box';
+      if (['pdf', 'doc', 'docx', 'txt', 'md'].includes(ext)) return 'file-text';
+      if (['jpg', 'png', 'webp', 'gif', 'svg'].includes(ext)) return 'image';
+      if (['zip', 'rar', '7z'].includes(ext)) return 'archive';
+      return 'file';
+    }
+
+    // 计算逻辑
     function parseSizeToBytes(sizeStr) {
       if (!sizeStr) return 0;
       const match = sizeStr.trim().match(/^([\d.]+)\s*([a-zA-Z]+)?$/);
@@ -361,46 +1145,75 @@
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    // 路径递归计算
     function getFolderPath(folderId) {
       const folder = folders.find(f => f.id === folderId);
       if (!folder) return '';
-      if (folder.parentId) {
-        return getFolderPath(folder.parentId) + '/' + folder.name;
-      }
-      return folder.name;
+      return folder.parentId ? getFolderPath(folder.parentId) + '/' + folder.name : folder.name;
+    }
+
+    function getFullFolderPath(folder) {
+      const drive = drives.find(d => d.id === folder.driveId);
+      const driveName = drive ? drive.name : 'Unknown';
+      return `${driveName}/${getFolderPath(folder.id)}`;
     }
 
     function getFullFilePath(file) {
       const drive = drives.find(d => d.id === file.driveId);
-      const driveName = drive ? drive.name : 'Unknown Drive';
-      if (!file.folderId) return `${driveName}/`;
-      const subPath = getFolderPath(file.folderId);
-      return `${driveName}/${subPath}`;
+      const driveName = drive ? drive.name : 'Unknown';
+      return file.folderId ? `${driveName}/${getFolderPath(file.folderId)}` : `${driveName}/`;
     }
 
-    // 渲染统计指标
-    function renderStats() {
-      document.getElementById('statDrives').innerText = `${drives.length} 个`;
-      document.getElementById('statFiles').innerText = `${files.length} 个`;
-      
-      const totalBytes = files.reduce((acc, f) => acc + parseSizeToBytes(f.size), 0);
-      document.getElementById('statSize').innerText = formatBytes(totalBytes);
+    // 统计文件夹直属子项目数量（子文件夹 + 文件）
+    function getFolderDirectItemCount(folderId) {
+      const subFolders = folders.filter(f => f.parentId === folderId).length;
+      const subFiles = files.filter(f => f.folderId === folderId).length;
+      return subFolders + subFiles;
     }
 
-    // 渲染主表格 (文件)
+    // 渲染主表格（支持严格层级隔离 + 全局搜索联动 + 文件备注展示）
     function renderFiles() {
       const tbody = document.getElementById('fileTableBody');
-      const search = document.getElementById('searchInput').value.toLowerCase();
-      
-      const filtered = files.filter(f => f.name.toLowerCase().includes(search));
+      const searchInput = document.getElementById('searchInput');
+      const clearBtn = document.getElementById('clearSearchBtn');
+      const search = searchInput.value.trim().toLowerCase();
 
-      if (filtered.length === 0) {
+      if (search) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+
+      let filteredFolders = [];
+      let filteredFiles = [];
+
+      if (search) {
+        filteredFolders = folders.filter(f => f.name.toLowerCase().includes(search));
+        filteredFiles = files.filter(
+          f => f.name.toLowerCase().includes(search) || (f.note && f.note.toLowerCase().includes(search))
+        );
+      } else if (currentSelectedDriveId === null) {
+        filteredFolders = folders.filter(f => !f.parentId);
+        filteredFiles = files.filter(f => !f.folderId);
+      } else {
+        filteredFolders = folders.filter(
+          f => f.driveId === currentSelectedDriveId && (f.parentId || null) === currentSelectedFolderId
+        );
+        filteredFiles = files.filter(
+          f => f.driveId === currentSelectedDriveId && (f.folderId || null) === currentSelectedFolderId
+        );
+      }
+
+      const totalCount = filteredFolders.length + filteredFiles.length;
+      document.getElementById('statusBarCount').innerText = search
+        ? `搜索到 ${totalCount} 个匹配项目`
+        : `${totalCount} 个项目`;
+
+      if (totalCount === 0) {
         tbody.innerHTML = `
           <tr>
             <td colspan="5" class="py-12 text-center text-slate-400">
-              <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 stroke-1"></i>
-              <p>暂无数据文件</p>
+              <i data-lucide="folder-open" class="w-10 h-10 mx-auto mb-2 stroke-1 text-slate-300"></i>
+              <p class="text-xs">${search ? '未找到匹配的文件、文件夹或备注' : '此目录为空'}</p>
             </td>
           </tr>
         `;
@@ -408,47 +1221,74 @@
         return;
       }
 
-      tbody.innerHTML = filtered.map(file => {
-        const category = getFileCategory(file.name);
-        const fullPath = getFullFilePath(file);
+      // 1. 生成文件夹行 HTML（置顶，点击进入文件夹内部）
+      const folderRowsHtml = filteredFolders.map(folder => {
+        const fullPath = getFullFolderPath(folder);
+        const childCount = getFolderDirectItemCount(folder.id);
         return `
-          <tr class="hover:bg-slate-50/80 transition-colors">
-            <td class="py-4 px-6 font-medium text-slate-800">${file.name}</td>
-            <td class="py-4 px-6">
-              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100/50">
-                ${category}
-              </span>
+          <tr onclick="enterFolder('${folder.id}')" class="hover:bg-indigo-50/50 transition-colors group cursor-pointer">
+            <td class="py-2 px-4 font-medium text-slate-800 flex items-center gap-2.5">
+              <i data-lucide="folder" class="w-4 h-4 text-amber-500 fill-amber-500/20 shrink-0"></i>
+              <div class="truncate">
+                <span class="block truncate group-hover:text-indigo-600 transition-colors">${escapeHtml(folder.name)}</span>
+                <span class="block text-[10px] font-mono text-slate-400 font-normal truncate">${escapeHtml(fullPath)} · ${childCount} 项</span>
+              </div>
             </td>
-            <td class="py-4 px-6 text-slate-600">${file.size || '-'}</td>
-            <td class="py-4 px-6 font-mono text-xs text-slate-500">${fullPath}</td>
-            <td class="py-4 px-6 text-right space-x-2">
-              <button onclick="openFileModal('${file.id}')" class="p-1.5 hover:bg-slate-200/60 rounded-lg text-slate-500 hover:text-indigo-600">
-                <i data-lucide="pencil" class="w-4 h-4"></i>
+            <td class="py-2 px-4 text-slate-500 font-normal">File folder</td>
+            <td class="py-2 px-4 text-slate-500 font-mono">-</td>
+            <td class="py-2 px-4 text-slate-400 font-mono">-</td>
+            <td onclick="event.stopPropagation()" class="py-2 px-4 text-right space-x-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+              <button onclick="openFolderModal('${folder.id}')" class="p-1 hover:bg-slate-200/60 rounded text-slate-500 hover:text-indigo-600" title="编辑文件夹">
+                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
               </button>
-              <button onclick="deleteFile('${file.id}')" class="p-1.5 hover:bg-slate-200/60 rounded-lg text-slate-500 hover:text-rose-600">
-                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              <button onclick="deleteFolder('${folder.id}')" class="p-1 hover:bg-slate-200/60 rounded text-slate-500 hover:text-rose-600" title="删除文件夹">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
               </button>
             </td>
           </tr>
         `;
       }).join('');
 
-      lucide.createIcons();
-    }
+      // 2. 生成文件行 HTML
+      const fileRowsHtml = filteredFiles.map(file => {
+        const category = getFileCategory(file.name);
+        const iconName = getFileIcon(file.name);
+        const fullPath = getFullFilePath(file);
+        const noteText = file.note ? escapeHtml(file.note) : '-';
 
-    // 渲染网盘列表视图
-    function renderDrives() {
-      const tbody = document.getElementById('driveTableBody');
-      if (drives.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="4" class="py-12 text-center text-slate-400">
-              <i data-lucide="hard-drive" class="w-10 h-10 mx-auto mb-2 stroke-1"></i>
-              <p>暂无已注册网盘，点击右上角加号可进行添加</p>
+        return `
+          <tr class="hover:bg-indigo-50/40 transition-colors group">
+            <td class="py-2 px-4 font-medium text-slate-800 flex items-center gap-2.5">
+              <i data-lucide="${iconName}" class="w-4 h-4 text-indigo-500 shrink-0"></i>
+              <div class="truncate">
+                <span class="block truncate">${escapeHtml(file.name)}</span>
+                <span class="block text-[10px] font-mono text-slate-400 font-normal truncate">${escapeHtml(fullPath)}</span>
+              </div>
+            </td>
+            <td class="py-2 px-4 text-slate-500 font-normal">${escapeHtml(category)}</td>
+            <td class="py-2 px-4 text-slate-500 font-mono">${escapeHtml(file.size) || '-'}</td>
+            <td class="py-2 px-4 text-slate-500 max-w-[160px] sm:max-w-[220px] truncate" title="${escapeHtml(file.note || '')}">${noteText}</td>
+            <td class="py-2 px-4 text-right space-x-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+              <button onclick="openFileModal('${file.id}')" class="p-1 hover:bg-slate-200/60 rounded text-slate-500 hover:text-indigo-600" title="编辑文件">
+                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+              </button>
+              <button onclick="deleteFile('${file.id}')" class="p-1 hover:bg-slate-200/60 rounded text-slate-500 hover:text-rose-600" title="删除文件">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              </button>
             </td>
           </tr>
         `;
-        lucide.createIcons();
+      }).join('');
+
+      tbody.innerHTML = folderRowsHtml + fileRowsHtml;
+      lucide.createIcons();
+    }
+
+    // 渲染网盘列表视图表格
+    function renderDriveTable() {
+      const tbody = document.getElementById('driveTableBody');
+      if (drives.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-400">暂无已注册网盘</td></tr>`;
         return;
       }
 
@@ -456,15 +1296,15 @@
         const folderCount = folders.filter(f => f.driveId === drive.id).length;
         const fileCount = files.filter(f => f.driveId === drive.id).length;
         return `
-          <tr class="hover:bg-slate-50/80 transition-colors">
-            <td class="py-4 px-6 font-semibold text-slate-800 flex items-center gap-2">
+          <tr class="hover:bg-slate-50">
+            <td class="py-3 px-4 font-semibold text-slate-800 flex items-center gap-2">
               <i data-lucide="hard-drive" class="w-4 h-4 text-indigo-500"></i>
-              ${drive.name}
+              ${escapeHtml(drive.name)}
             </td>
-            <td class="py-4 px-6 text-slate-600">${folderCount} 个文件夹</td>
-            <td class="py-4 px-6 text-slate-600">${fileCount} 个文件</td>
-            <td class="py-4 px-6 text-right">
-              <button onclick="deleteDrive('${drive.id}')" class="p-1.5 hover:bg-slate-200/60 rounded-lg text-slate-500 hover:text-rose-600" title="删除网盘">
+            <td class="py-3 px-4 text-slate-600">${folderCount} 个</td>
+            <td class="py-3 px-4 text-slate-600">${fileCount} 个</td>
+            <td class="py-3 px-4 text-right">
+              <button onclick="deleteDrive('${drive.id}')" class="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-rose-600" title="删除网盘">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
               </button>
             </td>
@@ -475,11 +1315,16 @@
       lucide.createIcons();
     }
 
-    // 模态框统一控制
-    function openModal(id) { 
-      document.getElementById(id).classList.remove('hidden'); 
-      lucide.createIcons();
+    // 渲染统计指标
+    function renderStats() {
+      document.getElementById('statDrives').innerText = `${drives.length} 个`;
+      document.getElementById('statFiles').innerText = `${files.length} 个`;
+      const totalBytes = files.reduce((acc, f) => acc + parseSizeToBytes(f.size), 0);
+      document.getElementById('statSize').innerText = formatBytes(totalBytes);
     }
+
+    // 模态框控制
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); lucide.createIcons(); }
     function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
     // 网盘逻辑
@@ -490,59 +1335,113 @@
     function saveDrive() {
       const name = document.getElementById('driveNameInput').value.trim();
       if (!name) return alert('请输入网盘名称');
-      drives.push({ id: Date.now().toString(), name });
+      drives.push({ id: generateUniqueId(), name });
       syncStorage();
       closeModal('driveModal');
     }
     function deleteDrive(id) {
-      if (confirm('删除网盘将同时清理涉及该网盘的文件与文件夹索引，确认删除吗？')) {
+      if (confirm('确认删除此网盘以及关联的文件记录吗？')) {
         drives = drives.filter(d => d.id !== id);
         folders = folders.filter(f => f.driveId !== id);
         files = files.filter(f => f.driveId !== id);
+        if (currentSelectedDriveId === id) {
+          currentSelectedDriveId = null;
+          currentSelectedFolderId = null;
+        }
         syncStorage();
       }
     }
 
-    // 文件夹逻辑
-    function openFolderModal() {
-      if (drives.length === 0) return alert('请先添加网盘');
-      
-      const driveSelect = document.getElementById('folderDriveSelect');
-      driveSelect.innerHTML = drives.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
-      
-      updateFolderParentOptions();
-      driveSelect.onchange = updateFolderParentOptions;
+    // 获取某个文件夹的所有子孙文件夹 ID
+    function getDescendantFolderIds(folderId) {
+      let result = [];
+      const children = folders.filter(f => f.parentId === folderId);
+      for (const child of children) {
+        result.push(child.id);
+        result = result.concat(getDescendantFolderIds(child.id));
+      }
+      return result;
+    }
 
-      document.getElementById('folderNameInput').value = '';
+    // 文件夹逻辑
+    function openFolderModal(folderId = null) {
+      if (drives.length === 0) return alert('请先添加网盘');
+      const driveSelect = document.getElementById('folderDriveSelect');
+      driveSelect.innerHTML = drives.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
+
+      if (folderId) {
+        const folder = folders.find(f => f.id === folderId);
+        document.getElementById('folderModalTitle').innerText = '编辑文件夹';
+        document.getElementById('editFolderId').value = folder.id;
+        driveSelect.value = folder.driveId;
+        updateFolderParentOptions();
+        document.getElementById('folderParentSelect').value = folder.parentId || '';
+        document.getElementById('folderNameInput').value = folder.name;
+      } else {
+        document.getElementById('folderModalTitle').innerText = '添加文件夹';
+        document.getElementById('editFolderId').value = '';
+        if (currentSelectedDriveId) {
+          driveSelect.value = currentSelectedDriveId;
+        }
+        updateFolderParentOptions();
+        if (currentSelectedFolderId) {
+          document.getElementById('folderParentSelect').value = currentSelectedFolderId;
+        }
+        document.getElementById('folderNameInput').value = '';
+      }
       openModal('folderModal');
     }
 
     function updateFolderParentOptions() {
       const driveId = document.getElementById('folderDriveSelect').value;
+      const editFolderId = document.getElementById('editFolderId').value;
       const parentSelect = document.getElementById('folderParentSelect');
-      const driveFolders = folders.filter(f => f.driveId === driveId);
       
-      parentSelect.innerHTML = `<option value="">根目录 (无父级)</option>` + 
-        driveFolders.map(f => `<option value="${f.id}">${getFolderPath(f.id)}</option>`).join('');
+      let excludedIds = [];
+      if (editFolderId) {
+        excludedIds = [editFolderId, ...getDescendantFolderIds(editFolderId)];
+      }
+
+      const driveFolders = folders.filter(f => f.driveId === driveId && !excludedIds.includes(f.id));
+      parentSelect.innerHTML = `<option value="">根目录</option>` + driveFolders.map(f => `<option value="${f.id}">${escapeHtml(getFolderPath(f.id))}</option>`).join('');
     }
 
     function saveFolder() {
+      const id = document.getElementById('editFolderId').value;
       const driveId = document.getElementById('folderDriveSelect').value;
       const parentId = document.getElementById('folderParentSelect').value || null;
       const name = document.getElementById('folderNameInput').value.trim();
       if (!name) return alert('请输入文件夹名称');
 
-      folders.push({ id: Date.now().toString(), driveId, parentId, name });
+      if (id) {
+        const index = folders.findIndex(f => f.id === id);
+        folders[index] = { ...folders[index], driveId, parentId, name };
+      } else {
+        folders.push({ id: generateUniqueId(), driveId, parentId, name });
+      }
       syncStorage();
       closeModal('folderModal');
+    }
+
+    function deleteFolder(id) {
+      if (confirm('删除文件夹将同时清理其内部的子文件夹及关联文件索引，确认删除吗？')) {
+        const targetFolder = folders.find(f => f.id === id);
+        const toDeleteIds = [id, ...getDescendantFolderIds(id)];
+        folders = folders.filter(f => !toDeleteIds.includes(f.id));
+        files = files.filter(f => !toDeleteIds.includes(f.folderId));
+
+        if (currentSelectedFolderId && toDeleteIds.includes(currentSelectedFolderId)) {
+          currentSelectedFolderId = targetFolder ? (targetFolder.parentId || null) : null;
+        }
+        syncStorage();
+      }
     }
 
     // 文件逻辑
     function openFileModal(fileId = null) {
       if (drives.length === 0) return alert('请先添加网盘');
-
       const driveSelect = document.getElementById('fileDriveSelect');
-      driveSelect.innerHTML = drives.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+      driveSelect.innerHTML = drives.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
 
       if (fileId) {
         const file = files.find(f => f.id === fileId);
@@ -550,6 +1449,7 @@
         document.getElementById('editFileId').value = file.id;
         document.getElementById('fileNameInput').value = file.name;
         document.getElementById('fileSizeInput').value = file.size;
+        document.getElementById('fileNoteInput').value = file.note || '';
         driveSelect.value = file.driveId;
         updateFileFolderOptions();
         document.getElementById('fileFolderSelect').value = file.folderId || '';
@@ -558,9 +1458,15 @@
         document.getElementById('editFileId').value = '';
         document.getElementById('fileNameInput').value = '';
         document.getElementById('fileSizeInput').value = '';
+        document.getElementById('fileNoteInput').value = '';
+        if (currentSelectedDriveId) {
+          driveSelect.value = currentSelectedDriveId;
+        }
         updateFileFolderOptions();
+        if (currentSelectedFolderId) {
+          document.getElementById('fileFolderSelect').value = currentSelectedFolderId;
+        }
       }
-
       openModal('fileModal');
     }
 
@@ -568,9 +1474,7 @@
       const driveId = document.getElementById('fileDriveSelect').value;
       const folderSelect = document.getElementById('fileFolderSelect');
       const driveFolders = folders.filter(f => f.driveId === driveId);
-
-      folderSelect.innerHTML = `<option value="">根目录</option>` + 
-        driveFolders.map(f => `<option value="${f.id}">${getFolderPath(f.id)}</option>`).join('');
+      folderSelect.innerHTML = `<option value="">根目录</option>` + driveFolders.map(f => `<option value="${f.id}">${escapeHtml(getFolderPath(f.id))}</option>`).join('');
     }
 
     function saveFile() {
@@ -579,16 +1483,16 @@
       const size = document.getElementById('fileSizeInput').value.trim();
       const driveId = document.getElementById('fileDriveSelect').value;
       const folderId = document.getElementById('fileFolderSelect').value || null;
+      const note = document.getElementById('fileNoteInput').value.trim();
 
       if (!name) return alert('请输入文件名称');
 
       if (id) {
         const index = files.findIndex(f => f.id === id);
-        files[index] = { ...files[index], name, size, driveId, folderId };
+        files[index] = { ...files[index], name, size, driveId, folderId, note };
       } else {
-        files.push({ id: Date.now().toString(), name, size, driveId, folderId });
+        files.push({ id: generateUniqueId(), name, size, driveId, folderId, note });
       }
-
       syncStorage();
       closeModal('fileModal');
     }
