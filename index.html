@@ -51,12 +51,12 @@
       </div>
     </div>
 
-    <!-- 右侧：搜索框、操作按钮与设置 -->
+    <!-- 右侧：搜索框、新建菜单、Google 登录状态与设置 -->
     <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
       <!-- 搜索框 -->
-      <div class="relative w-28 sm:w-60">
+      <div class="relative w-24 sm:w-52 md:w-60">
         <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
-        <input type="text" id="searchInput" oninput="renderFiles()" placeholder="搜索文件名或备注..." class="w-full pl-8 pr-6 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
+        <input type="text" id="searchInput" oninput="renderFiles()" placeholder="搜索名称或备注..." class="w-full pl-8 pr-6 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
         <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5" title="清空搜索">
           <i data-lucide="x" class="w-3.5 h-3.5"></i>
         </button>
@@ -84,6 +84,44 @@
           <button onclick="openFileModal()" class="w-full text-left px-3.5 py-2 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2">
             <i data-lucide="file-plus-2" class="w-4 h-4 text-indigo-500"></i>
             添加文件
+          </button>
+        </div>
+      </div>
+
+      <!-- Google 账号登录 / 实时同步状态区 -->
+      <div class="relative" id="authHeaderContainer">
+        <!-- 未登录按钮 -->
+        <button id="googleLoginBtn" onclick="loginWithGoogle()" class="px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs flex items-center gap-1.5 transition-all shadow-xs" title="请先登录 Google 账号">
+          <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"/>
+            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24Z"/>
+            <path fill="#FBBC05" d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14Z"/>
+            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96Z"/>
+          </svg>
+          <span class="hidden md:inline">Google 登录</span>
+        </button>
+
+        <!-- 已登录账号按钮 -->
+        <button id="googleUserBtn" onclick="toggleUserDropdown(event)" class="hidden px-2 py-1 rounded-lg border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100/70 text-slate-700 text-xs flex items-center gap-1.5 transition-all" title="Google 实时同步账号">
+          <img id="userAvatarImg" src="" alt="Avatar" class="w-5 h-5 rounded-full object-cover border border-white shadow-xs hidden" />
+          <div id="userAvatarFallback" class="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center">G</div>
+          <span id="syncBadgeText" class="hidden lg:inline font-medium text-emerald-700">实时同步</span>
+          <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400"></i>
+        </button>
+
+        <!-- 已登录账号下拉菜单 -->
+        <div id="userDropdownMenu" class="hidden absolute right-0 mt-2 w-60 bg-white rounded-xl shadow-xl border border-slate-100 p-3 z-40">
+          <div class="pb-2.5 mb-2.5 border-b border-slate-100">
+            <p id="userDisplayName" class="text-xs font-bold text-slate-800 truncate">Google 用户</p>
+            <p id="userEmailText" class="text-[11px] text-slate-400 truncate mt-0.5">user@gmail.com</p>
+            <div class="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">
+              <i data-lucide="radio" class="w-3.5 h-3.5 shrink-0"></i>
+              <span id="lastSyncTimeText">Cloud Firestore 实时连接</span>
+            </div>
+          </div>
+          <button onclick="logoutGoogle()" class="w-full text-left px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded-lg flex items-center gap-2 transition-colors font-medium">
+            <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+            退出登录
           </button>
         </div>
       </div>
@@ -139,8 +177,8 @@
 
       <!-- 底部系统提示 -->
       <div class="nav-header pt-3 border-t border-slate-200 text-[11px] text-slate-400 px-2 flex items-center gap-1.5">
-        <i data-lucide="monitor" class="w-3.5 h-3.5 shrink-0"></i>
-        <span class="nav-text">本地轻量模式</span>
+        <i id="sidebarModeIcon" data-lucide="lock" class="w-3.5 h-3.5 shrink-0 text-amber-500"></i>
+        <span id="sidebarModeText" class="nav-text">请先登录云端账号</span>
       </div>
     </aside>
 
@@ -317,7 +355,7 @@
             </button>
             <div id="dangerZoneContent" class="hidden px-3.5 pb-3.5 pt-2.5 border-t border-rose-200 bg-rose-50 space-y-2.5">
               <p class="text-[11px] text-rose-600 leading-relaxed">
-                高危操作：执行清空将永久删除所有网盘、文件夹及文件索引数据。
+                高危操作：执行清空将永久删除云端所有网盘、文件夹及文件索引数据。
               </p>
               <button type="button" onclick="openClearDataConfirm()" class="w-full py-2 px-3 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-xs rounded-lg shadow-sm shadow-rose-600/30 flex items-center justify-center gap-1.5 transition-all">
                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
@@ -350,7 +388,7 @@
       <div class="bg-amber-50/80 border border-amber-200 rounded-xl p-3 mb-5 text-xs text-slate-700 leading-relaxed">
         <p class="font-semibold text-amber-900 mb-1">这举动将把原有数据覆盖，是否继续？</p>
         <p class="text-[11px] text-slate-600">
-          选择<strong class="text-rose-600">“继续”</strong>将清空并覆盖当前所有数据；选择<strong class="text-indigo-600">“添加内容”</strong>将保留原有数据并合并导入（重名网盘或同目录重名文件将自动编号）。
+          选择<strong class="text-rose-600">“继续”</strong>将清空并覆盖当前云端所有数据；选择<strong class="text-indigo-600">“添加内容”</strong>将保留原有数据并合并导入（重名网盘或同目录重名文件将自动编号）。
         </p>
       </div>
 
@@ -382,7 +420,7 @@
       </div>
 
       <div class="bg-rose-50 border border-rose-200 rounded-xl p-3 mb-5 text-xs text-rose-800 leading-relaxed">
-        此操作将立即清空本地存储中的<strong class="font-bold text-rose-600">所有已注册网盘、文件夹层级及文件索引</strong>。清空后数据将无法找回，确定要继续吗？
+        此操作将立即清空云端<strong class="font-bold text-rose-600">所有已注册网盘、文件夹层级及文件索引</strong>。清空后数据将无法找回，确定要继续吗？
       </div>
 
       <div class="flex justify-end gap-2.5">
@@ -474,11 +512,16 @@
     </div>
   </div>
 
+  <!-- 全局 Toast 悬浮通知容器 -->
+  <div id="toastContainer" class="fixed top-5 right-5 z-[80] flex flex-col gap-2 pointer-events-none max-w-xs sm:max-w-sm w-full"></div>
+
+  <!-- 核心应用脚本 -->
   <script>
-    // 数据持久化
-    let drives = JSON.parse(localStorage.getItem('mc_drives_v2')) || [];
-    let folders = JSON.parse(localStorage.getItem('mc_folders_v2')) || [];
-    let files = JSON.parse(localStorage.getItem('mc_files_v2')) || [];
+    // 数据状态（强制登录模式：仅登录后由云端实时同步填充）
+    let drives = [];
+    let folders = [];
+    let files = [];
+    window.currentUser = null;
 
     // 当前视图与层级导航状态
     let currentMainTab = 'files'; // 'files' | 'drives'
@@ -500,19 +543,84 @@
         .replace(/'/g, '&#39;');
     }
 
+    // 全局 Toast 通知方法
+    window.showToast = function(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+
+      const styles = {
+        success: {
+          bg: 'bg-emerald-600 text-white border-emerald-500',
+          icon: 'check-circle-2'
+        },
+        error: {
+          bg: 'bg-rose-600 text-white border-rose-500',
+          icon: 'alert-circle'
+        },
+        warning: {
+          bg: 'bg-amber-500 text-white border-amber-400',
+          icon: 'alert-triangle'
+        },
+        info: {
+          bg: 'bg-slate-800 text-white border-slate-700',
+          icon: 'info'
+        }
+      };
+
+      const cfg = styles[type] || styles.info;
+      const toast = document.createElement('div');
+      toast.className = `pointer-events-auto flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl shadow-lg border text-xs font-medium transition-all duration-300 transform translate-x-full opacity-0 ${cfg.bg}`;
+      toast.innerHTML = `
+        <i data-lucide="${cfg.icon}" class="w-4 h-4 shrink-0 mt-0.5"></i>
+        <span class="flex-1 leading-relaxed break-words">${escapeHtml(message)}</span>
+        <button type="button" class="opacity-75 hover:opacity-100 shrink-0 p-0.5" aria-label="关闭">
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
+        </button>
+      `;
+
+      const dismiss = () => {
+        toast.classList.add('translate-x-full', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+      };
+
+      toast.querySelector('button').addEventListener('click', dismiss);
+      container.appendChild(toast);
+      if (window.lucide) lucide.createIcons();
+
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-x-full', 'opacity-0');
+      });
+
+      setTimeout(dismiss, 3200);
+    };
+
+    // 强制登录守卫
+    function requireAuth() {
+      if (!window.currentUser) {
+        window.showToast('请先登录 Google 账号！', 'error');
+        return false;
+      }
+      return true;
+    }
+
     // 生成唯一 ID
     function generateUniqueId() {
       return Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
     }
 
-    // 初始化
-    document.addEventListener('DOMContentLoaded', () => {
-      lucide.createIcons();
+    // 全量刷新界面渲染
+    window.renderAll = function() {
       renderSidebarDrives();
       renderBreadcrumb();
       renderStats();
       renderFiles();
       renderDriveTable();
+    };
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      window.renderAll();
       initDropdown();
     });
 
@@ -536,16 +644,14 @@
       lucide.createIcons();
     }
 
-    // 存储同步与全量更新
+    // 保存并实时推送至云端
     function syncStorage() {
-      localStorage.setItem('mc_drives_v2', JSON.stringify(drives));
-      localStorage.setItem('mc_folders_v2', JSON.stringify(folders));
-      localStorage.setItem('mc_files_v2', JSON.stringify(files));
-      renderSidebarDrives();
-      renderBreadcrumb();
-      renderStats();
-      renderFiles();
-      renderDriveTable();
+      if (!requireAuth()) return false;
+      window.renderAll();
+      if (typeof window.saveRecordsToCloud === 'function') {
+        window.saveRecordsToCloud();
+      }
+      return true;
     }
 
     // 初始化下拉控制
@@ -555,8 +661,19 @@
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         menu.classList.toggle('hidden');
+        document.getElementById('userDropdownMenu').classList.add('hidden');
       });
-      document.addEventListener('click', () => menu.classList.add('hidden'));
+      document.addEventListener('click', () => {
+        menu.classList.add('hidden');
+        document.getElementById('userDropdownMenu').classList.add('hidden');
+      });
+    }
+
+    // 切换已登录用户菜单
+    function toggleUserDropdown(e) {
+      e.stopPropagation();
+      document.getElementById('addDropdownMenu').classList.add('hidden');
+      document.getElementById('userDropdownMenu').classList.toggle('hidden');
     }
 
     // 打开系统设置弹窗（默认折叠所有子面板）
@@ -585,10 +702,9 @@
     }
 
     // ==========================================
-    // 导入 / 导出备份逻辑
+    // 导入 / 导出备份与合并引擎
     // ==========================================
 
-    // 触发下载辅助函数
     function triggerDownload(blob, filename) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -600,7 +716,6 @@
       URL.revokeObjectURL(url);
     }
 
-    // 获取当前日期字符串 YYYY-MM-DD
     function getDateStamp() {
       const now = new Date();
       const y = now.getFullYear();
@@ -611,6 +726,7 @@
 
     // 1. 导出 JSON 完整备份
     function exportBackupJson() {
+      if (!requireAuth()) return;
       const payload = {
         app: '多网盘索引管理系统',
         version: '2.0',
@@ -622,10 +738,12 @@
       const jsonStr = JSON.stringify(payload, null, 2);
       const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
       triggerDownload(blob, `multidrive-backup-${getDateStamp()}.json`);
+      window.showToast('JSON 备份文件已导出', 'success');
     }
 
     // 2. 导出 CSV 扁平报表（带 UTF-8 BOM）
     function exportBackupCsv() {
+      if (!requireAuth()) return;
       const escapeCsv = (val) => {
         const str = val == null ? '' : String(val);
         if (/[",\r\n]/.test(str)) {
@@ -637,7 +755,6 @@
       const headers = ['名称', '类型', '大小', '存储路径', '文件备注'];
       const rows = [headers.map(escapeCsv).join(',')];
 
-      // 导出文件夹行
       folders.forEach(folder => {
         const row = [
           folder.name,
@@ -649,7 +766,6 @@
         rows.push(row.map(escapeCsv).join(','));
       });
 
-      // 导出文件行
       files.forEach(file => {
         const row = [
           file.name,
@@ -661,14 +777,15 @@
         rows.push(row.map(escapeCsv).join(','));
       });
 
-      // 添加 UTF-8 BOM 确保 Excel / WPS 中文无乱码
       const csvContent = '\uFEFF' + rows.join('\r\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       triggerDownload(blob, `multidrive-export-${getDateStamp()}.csv`);
+      window.showToast('CSV 表格已导出', 'success');
     }
 
     // 3. 唤起 JSON 文件选择
     function triggerImportJson() {
+      if (!requireAuth()) return;
       const input = document.getElementById('importJsonInput');
       input.value = '';
       input.click();
@@ -676,6 +793,7 @@
 
     // 4. 读取并校验上传的 JSON 备份
     function handleImportJsonFile(event) {
+      if (!requireAuth()) return;
       const file = event.target.files[0];
       if (!file) return;
 
@@ -689,7 +807,7 @@
             !Array.isArray(parsed.folders) ||
             !Array.isArray(parsed.files)
           ) {
-            alert('无效的备份文件格式，请选择本系统导出的 JSON 备份文件。');
+            window.showToast('无效的备份文件格式，请选择本系统导出的 JSON 文件', 'error');
             return;
           }
 
@@ -704,30 +822,26 @@
 
           openModal('importConfirmModal');
         } catch (err) {
-          alert('JSON 文件解析失败，请检查文件是否损坏。');
+          window.showToast('JSON 文件解析失败，请检查文件是否损坏', 'error');
         }
       };
       reader.readAsText(file, 'utf-8');
     }
 
-    // 取消导入
     function cancelImportBackup() {
       pendingBackupData = null;
       closeModal('importConfirmModal');
     }
 
-    // 覆盖现有数据（点击“继续”）
-    function executeImportOverwrite() {
-      if (!pendingBackupData) return;
-
-      drives = pendingBackupData.drives.map(d => ({
+    // 规范化数据集结构
+    function normalizeDataset(rawData) {
+      const normDrives = (rawData.drives || []).map(d => ({
         id: String(d.id || generateUniqueId()),
         name: String(d.name || '未命名网盘')
       }));
+      const validDriveIds = new Set(normDrives.map(d => d.id));
 
-      const validDriveIds = new Set(drives.map(d => d.id));
-
-      folders = pendingBackupData.folders
+      const normFolders = (rawData.folders || [])
         .filter(f => validDriveIds.has(String(f.driveId)))
         .map(f => ({
           id: String(f.id || generateUniqueId()),
@@ -735,10 +849,9 @@
           parentId: f.parentId ? String(f.parentId) : null,
           name: String(f.name || '未命名文件夹')
         }));
+      const validFolderIds = new Set(normFolders.map(f => f.id));
 
-      const validFolderIds = new Set(folders.map(f => f.id));
-
-      files = pendingBackupData.files
+      const normFiles = (rawData.files || [])
         .filter(f => validDriveIds.has(String(f.driveId)))
         .map(f => ({
           id: String(f.id || generateUniqueId()),
@@ -749,6 +862,19 @@
           note: f.note ? String(f.note) : ''
         }));
 
+      return { drives: normDrives, folders: normFolders, files: normFiles };
+    }
+
+    // 覆盖现有数据（点击“继续”）
+    function executeImportOverwrite() {
+      if (!requireAuth()) return;
+      if (!pendingBackupData) return;
+
+      const normalized = normalizeDataset(pendingBackupData);
+      drives = normalized.drives;
+      folders = normalized.folders;
+      files = normalized.files;
+
       pendingBackupData = null;
       currentSelectedDriveId = null;
       currentSelectedFolderId = null;
@@ -757,7 +883,9 @@
       closeModal('importConfirmModal');
       closeModal('settingsModal');
       switchMainTab('files');
-      syncStorage();
+      if (syncStorage()) {
+        window.showToast('备份数据已覆盖并同步至云端', 'success');
+      }
     }
 
     // 获取不重名的网盘名称（重名则自动追加 #1, #2...）
@@ -789,6 +917,7 @@
 
     // 合并添加数据（点击“添加内容”）
     function executeImportAppend() {
+      if (!requireAuth()) return;
       if (!pendingBackupData) return;
 
       const updatedDrives = [...drives];
@@ -798,8 +927,7 @@
       const driveIdMap = new Map();
       const folderIdMap = new Map();
 
-      // 1. 合并网盘并处理重名编号
-      pendingBackupData.drives.forEach(d => {
+      (pendingBackupData.drives || []).forEach(d => {
         const oldId = String(d.id);
         const newId = generateUniqueId();
         driveIdMap.set(oldId, newId);
@@ -809,14 +937,11 @@
         updatedDrives.push({ id: newId, name: uniqueName });
       });
 
-      // 2. 第一遍生成文件夹新 ID 映射
-      const validImportedFolders = pendingBackupData.folders.filter(f => driveIdMap.has(String(f.driveId)));
+      const validImportedFolders = (pendingBackupData.folders || []).filter(f => driveIdMap.has(String(f.driveId)));
       validImportedFolders.forEach(f => {
-        const oldId = String(f.id);
-        folderIdMap.set(oldId, generateUniqueId());
+        folderIdMap.set(String(f.id), generateUniqueId());
       });
 
-      // 3. 第二遍重建文件夹父子层级归属
       validImportedFolders.forEach(f => {
         const newId = folderIdMap.get(String(f.id));
         const newDriveId = driveIdMap.get(String(f.driveId));
@@ -832,8 +957,7 @@
         });
       });
 
-      // 4. 合并文件并处理同文件夹内的重名编号
-      pendingBackupData.files.forEach(f => {
+      (pendingBackupData.files || []).forEach(f => {
         const newDriveId = driveIdMap.get(String(f.driveId));
         if (!newDriveId) return;
 
@@ -861,20 +985,22 @@
 
       closeModal('importConfirmModal');
       closeModal('settingsModal');
-      syncStorage();
+      if (syncStorage()) {
+        window.showToast('备份内容已合并并同步至云端', 'success');
+      }
     }
 
     // ==========================================
     // 危险区清空数据逻辑
     // ==========================================
 
-    // 打开清空数据二次确认弹窗
     function openClearDataConfirm() {
+      if (!requireAuth()) return;
       openModal('clearDataConfirmModal');
     }
 
-    // 确认清空所有已有数据
     function confirmClearAllData() {
+      if (!requireAuth()) return;
       drives = [];
       folders = [];
       files = [];
@@ -882,14 +1008,12 @@
       currentSelectedFolderId = null;
       document.getElementById('searchInput').value = '';
 
-      localStorage.removeItem('mc_drives_v2');
-      localStorage.removeItem('mc_folders_v2');
-      localStorage.removeItem('mc_files_v2');
-
       closeModal('clearDataConfirmModal');
       closeModal('settingsModal');
       switchMainTab('files');
-      syncStorage();
+      if (syncStorage()) {
+        window.showToast('已清空所有云端数据', 'success');
+      }
     }
 
     // ==========================================
@@ -930,7 +1054,6 @@
       lucide.createIcons();
     }
 
-    // 按网盘与文件夹层级导航
     function filterByDrive(driveId, folderId = null) {
       currentSelectedDriveId = driveId;
       currentSelectedFolderId = folderId;
@@ -944,14 +1067,12 @@
       renderFiles();
     }
 
-    // 点击表格中的文件夹进入内部
     function enterFolder(folderId) {
       const folder = folders.find(f => f.id === folderId);
       if (!folder) return;
       filterByDrive(folder.driveId, folder.id);
     }
 
-    // 返回上一级目录
     function goUpOneLevel() {
       if (currentMainTab !== 'files') return;
 
@@ -975,13 +1096,11 @@
       }
     }
 
-    // 清空搜索框
     function clearSearch() {
       document.getElementById('searchInput').value = '';
       renderFiles();
     }
 
-    // 获取从顶层到当前文件夹的完整祖先链
     function getFolderChain(folderId) {
       const chain = [];
       let currId = folderId;
@@ -996,7 +1115,6 @@
       return chain;
     }
 
-    // 渲染顶部面包屑路径与返回按钮状态
     function renderBreadcrumb() {
       const container = document.getElementById('breadcrumbContainer');
       const upBtn = document.getElementById('upLevelBtn');
@@ -1067,9 +1185,12 @@
       lucide.createIcons();
     }
 
-    // 渲染左侧网盘列表
     function renderSidebarDrives() {
       const list = document.getElementById('sidebarDriveList');
+      if (!window.currentUser) {
+        list.innerHTML = `<div class="nav-text text-[11px] text-slate-400 px-2 py-1">登录后查看网盘</div>`;
+        return;
+      }
       if (drives.length === 0) {
         list.innerHTML = `<div class="nav-text text-[11px] text-slate-400 px-2 py-1">暂无网盘</div>`;
         return;
@@ -1095,12 +1216,10 @@
       lucide.createIcons();
     }
 
-    // 剥离重名自动追加的 " #数字" 后缀以便正确识别扩展名
     function stripDuplicateSuffix(filename) {
       return String(filename).replace(/\s+#\d+$/, '');
     }
 
-    // 后缀自动推断
     function getFileCategory(filename) {
       if (!filename) return 'File';
       const cleanName = stripDuplicateSuffix(filename);
@@ -1115,7 +1234,6 @@
       return 'File';
     }
 
-    // 图标匹配助手
     function getFileIcon(filename) {
       const cleanName = stripDuplicateSuffix(filename);
       const ext = cleanName.split('.').pop()?.toLowerCase();
@@ -1126,7 +1244,6 @@
       return 'file';
     }
 
-    // 计算逻辑
     function parseSizeToBytes(sizeStr) {
       if (!sizeStr) return 0;
       const match = sizeStr.trim().match(/^([\d.]+)\s*([a-zA-Z]+)?$/);
@@ -1163,14 +1280,12 @@
       return file.folderId ? `${driveName}/${getFolderPath(file.folderId)}` : `${driveName}/`;
     }
 
-    // 统计文件夹直属子项目数量（子文件夹 + 文件）
     function getFolderDirectItemCount(folderId) {
       const subFolders = folders.filter(f => f.parentId === folderId).length;
       const subFiles = files.filter(f => f.folderId === folderId).length;
       return subFolders + subFiles;
     }
 
-    // 渲染主表格（支持严格层级隔离 + 全局搜索联动 + 文件备注展示）
     function renderFiles() {
       const tbody = document.getElementById('fileTableBody');
       const searchInput = document.getElementById('searchInput');
@@ -1181,6 +1296,27 @@
         clearBtn.classList.remove('hidden');
       } else {
         clearBtn.classList.add('hidden');
+      }
+
+      if (!window.currentUser) {
+        document.getElementById('statusBarCount').innerText = '未登录';
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="py-16 text-center text-slate-400">
+              <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3">
+                <i data-lucide="lock" class="w-6 h-6"></i>
+              </div>
+              <p class="text-sm font-bold text-slate-700 mb-1">需要登录 Google 账号</p>
+              <p class="text-xs text-slate-400 mb-4">登录后即可加载并实时同步您的云端网盘索引数据</p>
+              <button onclick="loginWithGoogle()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-sm inline-flex items-center gap-1.5 transition-all">
+                <i data-lucide="log-in" class="w-3.5 h-3.5"></i>
+                立即登录 Google 账号
+              </button>
+            </td>
+          </tr>
+        `;
+        lucide.createIcons();
+        return;
       }
 
       let filteredFolders = [];
@@ -1221,7 +1357,6 @@
         return;
       }
 
-      // 1. 生成文件夹行 HTML（置顶，点击进入文件夹内部）
       const folderRowsHtml = filteredFolders.map(folder => {
         const fullPath = getFullFolderPath(folder);
         const childCount = getFolderDirectItemCount(folder.id);
@@ -1249,7 +1384,6 @@
         `;
       }).join('');
 
-      // 2. 生成文件行 HTML
       const fileRowsHtml = filteredFiles.map(file => {
         const category = getFileCategory(file.name);
         const iconName = getFileIcon(file.name);
@@ -1284,9 +1418,12 @@
       lucide.createIcons();
     }
 
-    // 渲染网盘列表视图表格
     function renderDriveTable() {
       const tbody = document.getElementById('driveTableBody');
+      if (!window.currentUser) {
+        tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-400">请先登录 Google 账号以查看云端网盘</td></tr>`;
+        return;
+      }
       if (drives.length === 0) {
         tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-400">暂无已注册网盘</td></tr>`;
         return;
@@ -1315,7 +1452,6 @@
       lucide.createIcons();
     }
 
-    // 渲染统计指标
     function renderStats() {
       document.getElementById('statDrives').innerText = `${drives.length} 个`;
       document.getElementById('statFiles').innerText = `${files.length} 个`;
@@ -1323,23 +1459,27 @@
       document.getElementById('statSize').innerText = formatBytes(totalBytes);
     }
 
-    // 模态框控制
     function openModal(id) { document.getElementById(id).classList.remove('hidden'); lucide.createIcons(); }
     function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
     // 网盘逻辑
     function openDriveModal() {
+      if (!requireAuth()) return;
       document.getElementById('driveNameInput').value = '';
       openModal('driveModal');
     }
     function saveDrive() {
+      if (!requireAuth()) return;
       const name = document.getElementById('driveNameInput').value.trim();
-      if (!name) return alert('请输入网盘名称');
+      if (!name) return window.showToast('请输入网盘名称', 'warning');
       drives.push({ id: generateUniqueId(), name });
-      syncStorage();
-      closeModal('driveModal');
+      if (syncStorage()) {
+        closeModal('driveModal');
+        window.showToast(`已添加网盘：${name}`, 'success');
+      }
     }
     function deleteDrive(id) {
+      if (!requireAuth()) return;
       if (confirm('确认删除此网盘以及关联的文件记录吗？')) {
         drives = drives.filter(d => d.id !== id);
         folders = folders.filter(f => f.driveId !== id);
@@ -1348,11 +1488,12 @@
           currentSelectedDriveId = null;
           currentSelectedFolderId = null;
         }
-        syncStorage();
+        if (syncStorage()) {
+          window.showToast('网盘已删除', 'success');
+        }
       }
     }
 
-    // 获取某个文件夹的所有子孙文件夹 ID
     function getDescendantFolderIds(folderId) {
       let result = [];
       const children = folders.filter(f => f.parentId === folderId);
@@ -1365,7 +1506,8 @@
 
     // 文件夹逻辑
     function openFolderModal(folderId = null) {
-      if (drives.length === 0) return alert('请先添加网盘');
+      if (!requireAuth()) return;
+      if (drives.length === 0) return window.showToast('请先添加至少一个网盘', 'warning');
       const driveSelect = document.getElementById('folderDriveSelect');
       driveSelect.innerHTML = drives.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
 
@@ -1407,11 +1549,12 @@
     }
 
     function saveFolder() {
+      if (!requireAuth()) return;
       const id = document.getElementById('editFolderId').value;
       const driveId = document.getElementById('folderDriveSelect').value;
       const parentId = document.getElementById('folderParentSelect').value || null;
       const name = document.getElementById('folderNameInput').value.trim();
-      if (!name) return alert('请输入文件夹名称');
+      if (!name) return window.showToast('请输入文件夹名称', 'warning');
 
       if (id) {
         const index = folders.findIndex(f => f.id === id);
@@ -1419,11 +1562,14 @@
       } else {
         folders.push({ id: generateUniqueId(), driveId, parentId, name });
       }
-      syncStorage();
-      closeModal('folderModal');
+      if (syncStorage()) {
+        closeModal('folderModal');
+        window.showToast(id ? '文件夹已更新' : `已创建文件夹：${name}`, 'success');
+      }
     }
 
     function deleteFolder(id) {
+      if (!requireAuth()) return;
       if (confirm('删除文件夹将同时清理其内部的子文件夹及关联文件索引，确认删除吗？')) {
         const targetFolder = folders.find(f => f.id === id);
         const toDeleteIds = [id, ...getDescendantFolderIds(id)];
@@ -1433,13 +1579,16 @@
         if (currentSelectedFolderId && toDeleteIds.includes(currentSelectedFolderId)) {
           currentSelectedFolderId = targetFolder ? (targetFolder.parentId || null) : null;
         }
-        syncStorage();
+        if (syncStorage()) {
+          window.showToast('文件夹已删除', 'success');
+        }
       }
     }
 
     // 文件逻辑
     function openFileModal(fileId = null) {
-      if (drives.length === 0) return alert('请先添加网盘');
+      if (!requireAuth()) return;
+      if (drives.length === 0) return window.showToast('请先添加至少一个网盘', 'warning');
       const driveSelect = document.getElementById('fileDriveSelect');
       driveSelect.innerHTML = drives.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
 
@@ -1478,6 +1627,7 @@
     }
 
     function saveFile() {
+      if (!requireAuth()) return;
       const id = document.getElementById('editFileId').value;
       const name = document.getElementById('fileNameInput').value.trim();
       const size = document.getElementById('fileSizeInput').value.trim();
@@ -1485,7 +1635,7 @@
       const folderId = document.getElementById('fileFolderSelect').value || null;
       const note = document.getElementById('fileNoteInput').value.trim();
 
-      if (!name) return alert('请输入文件名称');
+      if (!name) return window.showToast('请输入文件名称', 'warning');
 
       if (id) {
         const index = files.findIndex(f => f.id === id);
@@ -1493,16 +1643,210 @@
       } else {
         files.push({ id: generateUniqueId(), name, size, driveId, folderId, note });
       }
-      syncStorage();
-      closeModal('fileModal');
+      if (syncStorage()) {
+        closeModal('fileModal');
+        window.showToast(id ? '文件信息已更新' : `已添加文件：${name}`, 'success');
+      }
     }
 
     function deleteFile(id) {
+      if (!requireAuth()) return;
       if (confirm('确认删除该文件索引吗？')) {
         files = files.filter(f => f.id !== id);
-        syncStorage();
+        if (syncStorage()) {
+          window.showToast('文件索引已删除', 'success');
+        }
       }
     }
+  </script>
+
+  <!-- Firebase Authentication & Cloud Firestore 实时同步模块 -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js";
+    import {
+      getAuth,
+      signInWithPopup,
+      GoogleAuthProvider,
+      onAuthStateChanged,
+      signOut
+    } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
+    import {
+      getFirestore,
+      doc,
+      setDoc,
+      onSnapshot
+    } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyC4VfqkcTJkVmuoXHyNZEuHNCro8pKtS60",
+      authDomain: "multi-cloud-manager-a0fbd.firebaseapp.com",
+      projectId: "multi-cloud-manager-a0fbd",
+      storageBucket: "multi-cloud-manager-a0fbd.firebasestorage.app",
+      messagingSenderId: "515595480169",
+      appId: "1:515595480169:web:a6b66c2c21178fff4006f8",
+      measurementId: "G-KXZH52CMB1"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const provider = new GoogleAuthProvider();
+
+    let unsubscribeSnapshot = null;
+
+    // 更新顶栏与侧边栏账号状态 UI
+    function updateAuthUI(user) {
+      const loginBtn = document.getElementById('googleLoginBtn');
+      const userBtn = document.getElementById('googleUserBtn');
+      const avatarImg = document.getElementById('userAvatarImg');
+      const avatarFallback = document.getElementById('userAvatarFallback');
+      const sidebarModeIcon = document.getElementById('sidebarModeIcon');
+      const sidebarModeText = document.getElementById('sidebarModeText');
+
+      if (user) {
+        loginBtn.classList.add('hidden');
+        userBtn.classList.remove('hidden');
+
+        document.getElementById('userDisplayName').innerText = user.displayName || 'Google 用户';
+        document.getElementById('userEmailText').innerText = user.email || '';
+
+        if (user.photoURL) {
+          avatarImg.src = user.photoURL;
+          avatarImg.classList.remove('hidden');
+          avatarFallback.classList.add('hidden');
+        } else {
+          avatarImg.classList.add('hidden');
+          avatarFallback.classList.remove('hidden');
+          avatarFallback.innerText = (user.displayName || user.email || 'G')[0].toUpperCase();
+        }
+
+        sidebarModeIcon.setAttribute('data-lucide', 'cloud-check');
+        sidebarModeIcon.classList.remove('text-amber-500');
+        sidebarModeIcon.classList.add('text-emerald-500');
+        sidebarModeText.innerText = '云端实时同步中';
+      } else {
+        loginBtn.classList.remove('hidden');
+        userBtn.classList.add('hidden');
+        document.getElementById('userDropdownMenu').classList.add('hidden');
+
+        sidebarModeIcon.setAttribute('data-lucide', 'lock');
+        sidebarModeIcon.classList.remove('text-emerald-500');
+        sidebarModeIcon.classList.add('text-amber-500');
+        sidebarModeText.innerText = '请先登录云端账号';
+      }
+      lucide.createIcons();
+    }
+
+    // Google 弹窗登录
+    window.loginWithGoogle = async () => {
+      try {
+        await signInWithPopup(auth, provider);
+      } catch (err) {
+        console.error('Google 登录失败:', err);
+        if (err.code === 'auth/operation-not-supported-in-this-environment' || window.location.protocol === 'file:') {
+          window.showToast('本地 file:// 协议不支持 Google 登录，请部署至 HTTPS 网站后访问', 'error');
+        } else if (err.code === 'auth/unauthorized-domain') {
+          window.showToast(`当前域名 (${window.location.hostname}) 未添加到 Firebase 授权网域`, 'error');
+        } else if (err.code !== 'auth/popup-closed-by-user') {
+          window.showToast('Google 登录失败：' + (err.message || err.code), 'error');
+        }
+      }
+    };
+
+    // 退出登录
+    window.logoutGoogle = async () => {
+      try {
+        if (unsubscribeSnapshot) {
+          unsubscribeSnapshot();
+          unsubscribeSnapshot = null;
+        }
+        await signOut(auth);
+      } catch (err) {
+        window.showToast('退出登录失败：' + err.message, 'error');
+      }
+    };
+
+    // 实时监听登录态与 Firestore 文档变化
+    onAuthStateChanged(auth, (user) => {
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+        unsubscribeSnapshot = null;
+      }
+
+      if (user) {
+        window.currentUser = user;
+        updateAuthUI(user);
+        window.showToast(`欢迎回来，${user.displayName || user.email}`, 'success');
+
+        unsubscribeSnapshot = onSnapshot(
+          doc(db, 'users', user.uid),
+          (docSnap) => {
+            if (docSnap.exists()) {
+              const norm = normalizeDataset(docSnap.data());
+              drives = norm.drives;
+              folders = norm.folders;
+              files = norm.files;
+
+              // 若当前所在网盘或文件夹在另一端被删除，自动回退至上级有效路径
+              if (currentSelectedDriveId && !drives.some(d => d.id === currentSelectedDriveId)) {
+                currentSelectedDriveId = null;
+                currentSelectedFolderId = null;
+              } else if (currentSelectedFolderId && !folders.some(f => f.id === currentSelectedFolderId)) {
+                currentSelectedFolderId = null;
+              }
+            } else {
+              drives = [];
+              folders = [];
+              files = [];
+            }
+
+            const now = new Date();
+            const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+            document.getElementById('lastSyncTimeText').innerText = `云端已同步 (${timeStr})`;
+            document.getElementById('syncBadgeText').innerText = '实时同步';
+
+            window.renderAll();
+          },
+          (error) => {
+            console.error('Firestore 实时监听异常:', error);
+            if (error.code === 'permission-denied') {
+              window.showToast('云端读取权限被拒绝，请检查 Firestore 安全规则', 'error');
+            } else {
+              window.showToast('云端同步连接中断，请检查网络', 'error');
+            }
+          }
+        );
+      } else {
+        window.currentUser = null;
+        drives = [];
+        folders = [];
+        files = [];
+        currentSelectedDriveId = null;
+        currentSelectedFolderId = null;
+        updateAuthUI(null);
+        window.renderAll();
+        window.showToast('未登录：请登录 Google 账号以同步云端数据', 'info');
+      }
+    });
+
+    // 写入云端 Firestore
+    window.saveRecordsToCloud = function() {
+      if (!window.currentUser) {
+        window.showToast('请先登录 Google 账号！', 'error');
+        return;
+      }
+      document.getElementById('syncBadgeText').innerText = '同步中...';
+      setDoc(doc(db, 'users', window.currentUser.uid), {
+        drives,
+        folders,
+        files,
+        updatedAt: Date.now()
+      }).catch((error) => {
+        console.error('云端同步失败:', error);
+        document.getElementById('syncBadgeText').innerText = '同步失败';
+        window.showToast('云同步失败，请检查网络或 Firestore 规则', 'error');
+      });
+    };
   </script>
 </body>
 </html>
