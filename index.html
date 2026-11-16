@@ -660,12 +660,12 @@
       lucide.createIcons();
     }
 
-    // 保存并实时推送至云端
-    function syncStorage() {
+    // 刷新本地视图并将增量变更（upserts / deletes）批量提交至云端子集合
+    async function commitCloudChanges(changes = {}) {
       if (!requireAuth()) return false;
       window.renderAll();
-      if (typeof window.saveRecordsToCloud === 'function') {
-        window.saveRecordsToCloud();
+      if (typeof window.applyCloudBatch === 'function') {
+        return await window.applyCloudBatch(changes);
       }
       return true;
     }
@@ -856,7 +856,35 @@
           parentId: f.parentId ? String(f.parentId) : null,
           name: String(f.name || '未命名文件夹')
         }));
-      const validFolderIds = new Set(normFolders.map(f => f.id));
+      const folderMap = new Map(normFolders.map(f => [f.id, f]));
+
+      // 校验 parentId 有效性、跨网盘一致性及环路切断
+      normFolders.forEach(folder => {
+        if (!folder.parentId) return;
+        const visited = new Set([folder.id]);
+        let currId = folder.parentId;
+        let isValidChain = true;
+
+        while (currId) {
+          if (visited.has(currId)) {
+            isValidChain = false; // 检测到环形引用
+            break;
+          }
+          const parentFolder = folderMap.get(currId);
+          if (!parentFolder || parentFolder.driveId !== folder.driveId) {
+            isValidChain = false; // 父级不存在或跨网盘
+            break;
+          }
+          visited.add(currId);
+          currId = parentFolder.parentId;
+        }
+
+        if (!isValidChain) {
+          folder.parentId = null;
+        }
+      });
+
+      const validFolderIds = new Set(folderMap.keys());
 
       const normFiles = (rawData.files || [])
         .filter(f => validDriveIds.has(String(f.driveId)))
@@ -877,6 +905,10 @@
       if (!requireAuth()) return;
       if (!pendingBackupData) return;
 
+      const oldDriveIds = drives.map(d => d.id);
+      const oldFolderIds = folders.map(f => f.id);
+      const oldFileIds = files.map(f => f.id);
+
       const normalized = normalizeDataset(pendingBackupData);
       drives = normalized.drives;
       folders = normalized.folders;
@@ -890,9 +922,13 @@
       closeModal('importConfirmModal');
       closeModal('settingsModal');
       switchMainTab('files');
-      if (syncStorage()) {
-        window.showToast('备份数据已覆盖并同步至云端', 'success');
-      }
+
+      commitCloudChanges({
+        deletes: { drives: oldDriveIds, folders: oldFolderIds, files: oldFileIds },
+        upserts: { drives, folders, files }
+      }).then(ok => {
+        if (ok) window.showToast('备份数据已覆盖并同步至云端', 'success');
+      });
     }
 
     // 获取不重名的网盘名称（重名则自动追加 #1, #2...）
@@ -985,16 +1021,26 @@
         });
       });
 
+      const prevDriveIds = new Set(drives.map(d => d.id));
+      const prevFolderIds = new Set(folders.map(f => f.id));
+      const prevFileIds = new Set(files.map(f => f.id));
+
       drives = updatedDrives;
       folders = updatedFolders;
       files = updatedFiles;
       pendingBackupData = null;
 
+      const addedDrives = drives.filter(d => !prevDriveIds.has(d.id));
+      const addedFolders = folders.filter(f => !prevFolderIds.has(f.id));
+      const addedFiles = files.filter(f => !prevFileIds.has(f.id));
+
       closeModal('importConfirmModal');
       closeModal('settingsModal');
-      if (syncStorage()) {
-        window.showToast('备份内容已合并并同步至云端', 'success');
-      }
+      commitCloudChanges({
+        upserts: { drives: addedDrives, folders: addedFolders, files: addedFiles }
+      }).then(ok => {
+        if (ok) window.showToast('备份内容已合并并同步至云端', 'success');
+      });
     }
 
     // ==========================================
@@ -1008,6 +1054,10 @@
 
     function confirmClearAllData() {
       if (!requireAuth()) return;
+      const delDrives = drives.map(d => d.id);
+      const delFolders = folders.map(f => f.id);
+      const delFiles = files.map(f => f.id);
+
       drives = [];
       folders = [];
       files = [];
@@ -1018,9 +1068,11 @@
       closeModal('clearDataConfirmModal');
       closeModal('settingsModal');
       switchMainTab('files');
-      if (syncStorage()) {
-        window.showToast('已清空所有云端数据', 'success');
-      }
+      commitCloudChanges({
+        deletes: { drives: delDrives, folders: delFolders, files: delFiles }
+      }).then(ok => {
+        if (ok) window.showToast('已清空所有云端数据', 'success');
+      });
     }
 
     // ==========================================
@@ -1269,10 +1321,13 @@
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    function getFolderPath(folderId) {
+    function getFolderPath(folderId, visited = new Set()) {
+      if (!folderId || visited.has(folderId)) return '';
       const folder = folders.find(f => f.id === folderId);
       if (!folder) return '';
-      return folder.parentId ? getFolderPath(folder.parentId) + '/' + folder.name : folder.name;
+      visited.add(folderId);
+      const parentPath = folder.parentId ? getFolderPath(folder.parentId, visited) : '';
+      return parentPath ? `${parentPath}/${folder.name}` : folder.name;
     }
 
     function getFullFolderPath(folder) {
@@ -1479,15 +1534,19 @@
       if (!requireAuth()) return;
       const name = document.getElementById('driveNameInput').value.trim();
       if (!name) return window.showToast('请输入网盘名称', 'warning');
-      drives.push({ id: generateUniqueId(), name });
-      if (syncStorage()) {
-        closeModal('driveModal');
-        window.showToast(`已添加网盘：${name}`, 'success');
-      }
+      const newDrive = { id: generateUniqueId(), name };
+      drives.push(newDrive);
+      closeModal('driveModal');
+      commitCloudChanges({ upserts: { drives: [newDrive] } }).then(ok => {
+        if (ok) window.showToast(`已添加网盘：${name}`, 'success');
+      });
     }
     function deleteDrive(id) {
       if (!requireAuth()) return;
       if (confirm('确认删除此网盘以及关联的文件记录吗？')) {
+        const delFolderIds = folders.filter(f => f.driveId === id).map(f => f.id);
+        const delFileIds = files.filter(f => f.driveId === id).map(f => f.id);
+
         drives = drives.filter(d => d.id !== id);
         folders = folders.filter(f => f.driveId !== id);
         files = files.filter(f => f.driveId !== id);
@@ -1495,9 +1554,11 @@
           currentSelectedDriveId = null;
           currentSelectedFolderId = null;
         }
-        if (syncStorage()) {
-          window.showToast('网盘已删除', 'success');
-        }
+        commitCloudChanges({
+          deletes: { drives: [id], folders: delFolderIds, files: delFileIds }
+        }).then(ok => {
+          if (ok) window.showToast('网盘已删除', 'success');
+        });
       }
     }
 
@@ -1563,16 +1624,19 @@
       const name = document.getElementById('folderNameInput').value.trim();
       if (!name) return window.showToast('请输入文件夹名称', 'warning');
 
+      let savedFolder;
       if (id) {
         const index = folders.findIndex(f => f.id === id);
-        folders[index] = { ...folders[index], driveId, parentId, name };
+        savedFolder = { ...folders[index], driveId, parentId, name };
+        folders[index] = savedFolder;
       } else {
-        folders.push({ id: generateUniqueId(), driveId, parentId, name });
+        savedFolder = { id: generateUniqueId(), driveId, parentId, name };
+        folders.push(savedFolder);
       }
-      if (syncStorage()) {
-        closeModal('folderModal');
-        window.showToast(id ? '文件夹已更新' : `已创建文件夹：${name}`, 'success');
-      }
+      closeModal('folderModal');
+      commitCloudChanges({ upserts: { folders: [savedFolder] } }).then(ok => {
+        if (ok) window.showToast(id ? '文件夹已更新' : `已创建文件夹：${name}`, 'success');
+      });
     }
 
     function deleteFolder(id) {
@@ -1580,15 +1644,19 @@
       if (confirm('删除文件夹将同时清理其内部的子文件夹及关联文件索引，确认删除吗？')) {
         const targetFolder = folders.find(f => f.id === id);
         const toDeleteIds = [id, ...getDescendantFolderIds(id)];
+        const delFileIds = files.filter(f => toDeleteIds.includes(f.folderId)).map(f => f.id);
+
         folders = folders.filter(f => !toDeleteIds.includes(f.id));
         files = files.filter(f => !toDeleteIds.includes(f.folderId));
 
         if (currentSelectedFolderId && toDeleteIds.includes(currentSelectedFolderId)) {
           currentSelectedFolderId = targetFolder ? (targetFolder.parentId || null) : null;
         }
-        if (syncStorage()) {
-          window.showToast('文件夹已删除', 'success');
-        }
+        commitCloudChanges({
+          deletes: { folders: toDeleteIds, files: delFileIds }
+        }).then(ok => {
+          if (ok) window.showToast('文件夹已删除', 'success');
+        });
       }
     }
 
@@ -1644,25 +1712,28 @@
 
       if (!name) return window.showToast('请输入文件名称', 'warning');
 
+      let savedFile;
       if (id) {
         const index = files.findIndex(f => f.id === id);
-        files[index] = { ...files[index], name, size, driveId, folderId, note };
+        savedFile = { ...files[index], name, size, driveId, folderId, note };
+        files[index] = savedFile;
       } else {
-        files.push({ id: generateUniqueId(), name, size, driveId, folderId, note });
+        savedFile = { id: generateUniqueId(), name, size, driveId, folderId, note };
+        files.push(savedFile);
       }
-      if (syncStorage()) {
-        closeModal('fileModal');
-        window.showToast(id ? '文件信息已更新' : `已添加文件：${name}`, 'success');
-      }
+      closeModal('fileModal');
+      commitCloudChanges({ upserts: { files: [savedFile] } }).then(ok => {
+        if (ok) window.showToast(id ? '文件信息已更新' : `已添加文件：${name}`, 'success');
+      });
     }
 
     function deleteFile(id) {
       if (!requireAuth()) return;
       if (confirm('确认删除该文件索引吗？')) {
         files = files.filter(f => f.id !== id);
-        if (syncStorage()) {
-          window.showToast('文件索引已删除', 'success');
-        }
+        commitCloudChanges({ deletes: { files: [id] } }).then(ok => {
+          if (ok) window.showToast('文件索引已删除', 'success');
+        });
       }
     }
   </script>
@@ -1680,7 +1751,10 @@
     import {
       getFirestore,
       doc,
+      collection,
+      getDoc,
       setDoc,
+      writeBatch,
       onSnapshot
     } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 
@@ -1698,8 +1772,6 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
     const provider = new GoogleAuthProvider();
-
-    let unsubscribeSnapshot = null;
 
     // 更新系统设置、顶栏状态点与侧边栏账号状态 UI
     function updateAuthUI(user) {
@@ -1768,71 +1840,115 @@
       }
     };
 
-    // 退出登录
+    let unsubscribeListeners = [];
+    let rawCloudState = { drives: [], folders: [], files: [] };
+
+    function clearCloudListeners() {
+      unsubscribeListeners.forEach(unsub => unsub());
+      unsubscribeListeners = [];
+    }
+
+    // 合并三张子集合快照并刷新界面
+    function syncFromSubCollections() {
+      const norm = normalizeDataset(rawCloudState);
+      drives = norm.drives;
+      folders = norm.folders;
+      files = norm.files;
+
+      // 若当前所在网盘或文件夹在另一端被删除，自动回退至上级有效路径
+      if (currentSelectedDriveId && !drives.some(d => d.id === currentSelectedDriveId)) {
+        currentSelectedDriveId = null;
+        currentSelectedFolderId = null;
+      } else if (currentSelectedFolderId && !folders.some(f => f.id === currentSelectedFolderId)) {
+        currentSelectedFolderId = null;
+      }
+
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+      document.getElementById('lastSyncTimeText').innerText = `云端已同步 (${timeStr})`;
+      document.getElementById('syncBadgeText').innerText = '实时同步';
+
+      window.renderAll();
+    }
+
+    // 自动迁移旧版单文档 (users/{uid}) 数据至子集合（兼容平滑升级）
+    async function migrateLegacySingleDocIfNeeded(uid) {
+      try {
+        const legacyRef = doc(db, 'users', uid);
+        const legacySnap = await getDoc(legacyRef);
+        if (!legacySnap.exists()) return;
+
+        const data = legacySnap.data();
+        const hasLegacyArrays =
+          (Array.isArray(data.drives) && data.drives.length > 0) ||
+          (Array.isArray(data.folders) && data.folders.length > 0) ||
+          (Array.isArray(data.files) && data.files.length > 0);
+
+        if (hasLegacyArrays) {
+          const norm = normalizeDataset(data);
+          await window.applyCloudBatch({
+            upserts: { drives: norm.drives, folders: norm.folders, files: norm.files }
+          });
+          // 清空旧单文档内嵌数组，避免重复迁移
+          await setDoc(legacyRef, {
+            drives: [],
+            folders: [],
+            files: [],
+            migratedToSubcollectionsAt: Date.now()
+          }, { merge: true });
+          window.showToast('已自动将历史数据升级至子集合存储架构', 'info');
+        }
+      } catch (err) {
+        console.error('旧数据自动迁移检查失败:', err);
+      }
+    }
+
+    // 修改 logoutGoogle 中的监听器清理调用
     window.logoutGoogle = async () => {
       try {
-        if (unsubscribeSnapshot) {
-          unsubscribeSnapshot();
-          unsubscribeSnapshot = null;
-        }
+        clearCloudListeners();
         await signOut(auth);
       } catch (err) {
         window.showToast('退出登录失败：' + err.message, 'error');
       }
     };
 
-    // 实时监听登录态与 Firestore 文档变化
-    onAuthStateChanged(auth, (user) => {
-      if (unsubscribeSnapshot) {
-        unsubscribeSnapshot();
-        unsubscribeSnapshot = null;
-      }
+    // 实时监听登录态与三张 Firestore 子集合变化
+    onAuthStateChanged(auth, async (user) => {
+      clearCloudListeners();
 
       if (user) {
         window.currentUser = user;
         updateAuthUI(user);
         window.showToast(`欢迎回来，${user.displayName || user.email}`, 'success');
 
-        unsubscribeSnapshot = onSnapshot(
-          doc(db, 'users', user.uid),
-          (docSnap) => {
-            if (docSnap.exists()) {
-              const norm = normalizeDataset(docSnap.data());
-              drives = norm.drives;
-              folders = norm.folders;
-              files = norm.files;
+        rawCloudState = { drives: [], folders: [], files: [] };
+        const subNames = ['drives', 'folders', 'files'];
 
-              // 若当前所在网盘或文件夹在另一端被删除，自动回退至上级有效路径
-              if (currentSelectedDriveId && !drives.some(d => d.id === currentSelectedDriveId)) {
-                currentSelectedDriveId = null;
-                currentSelectedFolderId = null;
-              } else if (currentSelectedFolderId && !folders.some(f => f.id === currentSelectedFolderId)) {
-                currentSelectedFolderId = null;
+        subNames.forEach(colName => {
+          const colRef = collection(db, 'users', user.uid, colName);
+          const unsub = onSnapshot(
+            colRef,
+            (querySnap) => {
+              rawCloudState[colName] = querySnap.docs.map(d => ({ id: d.id, ...d.data() }));
+              syncFromSubCollections();
+            },
+            (error) => {
+              console.error(`Firestore [${colName}] 监听异常:`, error);
+              if (error.code === 'permission-denied') {
+                window.showToast('云端读取权限被拒绝，请检查 Firestore 子集合安全规则', 'error');
+              } else {
+                window.showToast('云端同步连接中断，请检查网络', 'error');
               }
-            } else {
-              drives = [];
-              folders = [];
-              files = [];
             }
+          );
+          unsubscribeListeners.push(unsub);
+        });
 
-            const now = new Date();
-            const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-            document.getElementById('lastSyncTimeText').innerText = `云端已同步 (${timeStr})`;
-            document.getElementById('syncBadgeText').innerText = '实时同步';
-
-            window.renderAll();
-          },
-          (error) => {
-            console.error('Firestore 实时监听异常:', error);
-            if (error.code === 'permission-denied') {
-              window.showToast('云端读取权限被拒绝，请检查 Firestore 安全规则', 'error');
-            } else {
-              window.showToast('云端同步连接中断，请检查网络', 'error');
-            }
-          }
-        );
+        await migrateLegacySingleDocIfNeeded(user.uid);
       } else {
         window.currentUser = null;
+        rawCloudState = { drives: [], folders: [], files: [] };
         drives = [];
         folders = [];
         files = [];
@@ -1844,23 +1960,51 @@
       }
     });
 
-    // 写入云端 Firestore
-    window.saveRecordsToCloud = function() {
+    // 分片批量写入/删除子集合文档（每批上限 450 条，规避 Firestore 500 条限制）
+    window.applyCloudBatch = async function({ upserts = {}, deletes = {} } = {}) {
       if (!window.currentUser) {
         window.showToast('请先登录 Google 账号！', 'error');
-        return;
+        return false;
       }
-      document.getElementById('syncBadgeText').innerText = '同步中...';
-      setDoc(doc(db, 'users', window.currentUser.uid), {
-        drives,
-        folders,
-        files,
-        updatedAt: Date.now()
-      }).catch((error) => {
-        console.error('云端同步失败:', error);
-        document.getElementById('syncBadgeText').innerText = '同步失败';
-        window.showToast('云同步失败，请检查网络或 Firestore 规则', 'error');
+
+      const uid = window.currentUser.uid;
+      const operations = [];
+
+      ['drives', 'folders', 'files'].forEach(colName => {
+        (deletes[colName] || []).forEach(id => {
+          operations.push({ type: 'delete', ref: doc(db, 'users', uid, colName, String(id)) });
+        });
+        (upserts[colName] || []).forEach(item => {
+          const { id, ...payload } = item;
+          operations.push({
+            type: 'set',
+            ref: doc(db, 'users', uid, colName, String(id)),
+            data: { ...payload, updatedAt: Date.now() }
+          });
+        });
       });
+
+      if (operations.length === 0) return true;
+
+      document.getElementById('syncBadgeText').innerText = '同步中...';
+      try {
+        const CHUNK_SIZE = 450;
+        for (let i = 0; i < operations.length; i += CHUNK_SIZE) {
+          const batch = writeBatch(db);
+          const chunk = operations.slice(i, i + CHUNK_SIZE);
+          chunk.forEach(op => {
+            if (op.type === 'delete') batch.delete(op.ref);
+            else batch.set(op.ref, op.data);
+          });
+          await batch.commit();
+        }
+        return true;
+      } catch (error) {
+        console.error('云端批量同步失败:', error);
+        document.getElementById('syncBadgeText').innerText = '同步失败';
+        window.showToast('云同步失败，请检查网络或 Firestore 子集合规则', 'error');
+        return false;
+      }
     };
   </script>
 </body>
