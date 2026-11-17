@@ -1484,13 +1484,15 @@
             <td class="py-2 px-4 text-slate-500 font-normal">File folder</td>
             <td class="py-2 px-4 text-slate-500 font-mono">-</td>
             <td class="py-2 px-4 text-slate-400 font-mono">-</td>
-            <td onclick="event.stopPropagation()" class="py-2 px-4 text-right space-x-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-              <button onclick="openFolderModal('${folder.id}')" class="p-1 hover:bg-slate-200/60 rounded text-slate-500 hover:text-indigo-600" title="编辑文件夹">
-                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
-              </button>
-              <button onclick="deleteFolder('${folder.id}')" class="p-1 hover:bg-slate-200/60 rounded text-slate-500 hover:text-rose-600" title="删除文件夹">
-                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-              </button>
+            <td onclick="event.stopPropagation()" class="py-2 px-4 text-right whitespace-nowrap">
+              <div class="inline-flex items-center justify-end gap-1">
+                <button onclick="openFolderModal('${folder.id}')" class="p-1.5 hover:bg-slate-200/70 active:bg-slate-200 rounded-lg text-slate-500 hover:text-indigo-600 transition-colors" title="编辑文件夹名称">
+                  <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="openActionMenu(event, 'folder', '${folder.id}')" class="p-1.5 hover:bg-slate-200/70 active:bg-slate-200 rounded-lg text-slate-500 hover:text-slate-800 transition-colors" title="更多操作">
+                  <i data-lucide="more-vertical" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
             </td>
           </tr>
         `;
@@ -1514,13 +1516,15 @@
             <td class="py-2 px-4 text-slate-500 font-normal">${escapeHtml(category)}</td>
             <td class="py-2 px-4 text-slate-500 font-mono">${escapeHtml(file.size) || '-'}</td>
             <td class="py-2 px-4 text-slate-500 max-w-[160px] sm:max-w-[220px] truncate" title="${escapeHtml(file.note || '')}">${noteText}</td>
-            <td class="py-2 px-4 text-right space-x-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-              <button onclick="openFileModal('${file.id}')" class="p-1 hover:bg-slate-200/60 rounded text-slate-500 hover:text-indigo-600" title="编辑文件">
-                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
-              </button>
-              <button onclick="deleteFile('${file.id}')" class="p-1 hover:bg-slate-200/60 rounded text-slate-500 hover:text-rose-600" title="删除文件">
-                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-              </button>
+            <td onclick="event.stopPropagation()" class="py-2 px-4 text-right whitespace-nowrap">
+              <div class="inline-flex items-center justify-end gap-1">
+                <button onclick="openFileModal('${file.id}')" class="p-1.5 hover:bg-slate-200/70 active:bg-slate-200 rounded-lg text-slate-500 hover:text-indigo-600 transition-colors" title="编辑文件信息">
+                  <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="openActionMenu(event, 'file', '${file.id}')" class="p-1.5 hover:bg-slate-200/70 active:bg-slate-200 rounded-lg text-slate-500 hover:text-slate-800 transition-colors" title="更多操作">
+                  <i data-lucide="more-vertical" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
             </td>
           </tr>
         `;
@@ -1629,17 +1633,18 @@
       const driveSelect = document.getElementById('folderDriveSelect');
       driveSelect.innerHTML = drives.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
 
+      const locationBox = document.getElementById('folderLocationFields');
+
       if (folderId) {
         const folder = folders.find(f => f.id === folderId);
         document.getElementById('folderModalTitle').innerText = '编辑文件夹';
         document.getElementById('editFolderId').value = folder.id;
-        driveSelect.value = folder.driveId;
-        updateFolderParentOptions();
-        document.getElementById('folderParentSelect').value = folder.parentId || '';
+        locationBox.classList.add('hidden');
         document.getElementById('folderNameInput').value = folder.name;
       } else {
         document.getElementById('folderModalTitle').innerText = '添加文件夹';
         document.getElementById('editFolderId').value = '';
+        locationBox.classList.remove('hidden');
         if (currentSelectedDriveId) {
           driveSelect.value = currentSelectedDriveId;
         }
@@ -1669,23 +1674,24 @@
     function saveFolder() {
       if (!requireAuth()) return;
       const id = document.getElementById('editFolderId').value;
-      const driveId = document.getElementById('folderDriveSelect').value;
-      const parentId = document.getElementById('folderParentSelect').value || null;
       const name = document.getElementById('folderNameInput').value.trim();
       if (!name) return window.showToast('请输入文件夹名称', 'warning');
 
       let savedFolder;
       if (id) {
         const index = folders.findIndex(f => f.id === id);
-        savedFolder = { ...folders[index], driveId, parentId, name };
+        if (index === -1) return;
+        savedFolder = { ...folders[index], name };
         folders[index] = savedFolder;
       } else {
+        const driveId = document.getElementById('folderDriveSelect').value;
+        const parentId = document.getElementById('folderParentSelect').value || null;
         savedFolder = { id: generateUniqueId(), driveId, parentId, name };
         folders.push(savedFolder);
       }
       closeModal('folderModal');
       commitCloudChanges({ upserts: { folders: [savedFolder] } }).then(ok => {
-        if (ok) window.showToast(id ? '文件夹已更新' : `已创建文件夹：${name}`, 'success');
+        if (ok) window.showToast(id ? '文件夹名称已更新' : `已创建文件夹：${name}`, 'success');
       });
     }
 
