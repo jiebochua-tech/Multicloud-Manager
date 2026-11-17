@@ -150,7 +150,7 @@
 
       <!-- 视图 1：文件与文件夹混合列表视图 (Win11 File List UI) -->
       <div id="viewFiles" class="flex-1 flex flex-col">
-        <div class="overflow-x-auto flex-1">
+        <div id="fileTableScrollWrap" class="overflow-x-auto flex-1">
           <table class="w-full text-left border-collapse min-w-[580px]">
             <thead>
               <tr class="border-b border-slate-200 bg-slate-50/50 text-xs font-medium text-slate-500">
@@ -404,7 +404,7 @@
       <div class="bg-amber-50/80 border border-amber-200 rounded-xl p-3 mb-5 text-xs text-slate-700 leading-relaxed">
         <p class="font-semibold text-amber-900 mb-1">这举动将把原有数据覆盖，是否继续？</p>
         <p class="text-[11px] text-slate-600">
-          选择<strong class="text-rose-600">“继续”</strong>将清空并覆盖当前云端所有数据；选择<strong class="text-indigo-600">“添加内容”</strong>将保留原有数据并合并导入（重名网盘或同目录重名文件将自动编号）。
+          选择<strong class="text-rose-600">“继续”</strong>将清空并覆盖当前云端所有数据；选择<strong class="text-indigo-600">“添加内容”</strong>将保留原有数据并合并导入（同目录重名网盘或文件将自动编号）。
         </p>
       </div>
 
@@ -598,6 +598,10 @@
     // 待处理的导入备份暂存数据
     let pendingBackupData = null;
 
+    // 当前三点操作菜单上下文与迁移/复制弹窗状态
+    let activeActionTarget = null; // { type: 'folder' | 'file', id: string }
+    let transferState = null; // { mode: 'move' | 'copy', type: 'folder' | 'file', id: string }
+
     // HTML 转义助手
     function escapeHtml(str) {
       if (!str) return '';
@@ -676,6 +680,7 @@
 
     // 全量刷新界面渲染
     window.renderAll = function() {
+      closeActionMenu();
       renderSidebarDrives();
       renderBreadcrumb();
       renderStats();
@@ -688,6 +693,7 @@
       lucide.createIcons();
       window.renderAll();
       initDropdown();
+      initActionContextMenu();
     });
 
     // 切换侧边栏折叠/展开
@@ -726,11 +732,90 @@
       const menu = document.getElementById('addDropdownMenu');
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
+        closeActionMenu();
         menu.classList.toggle('hidden');
       });
       document.addEventListener('click', () => {
         menu.classList.add('hidden');
+        closeActionMenu();
       });
+    }
+
+    // 初始化全局三点操作菜单监听
+    function initActionContextMenu() {
+      const menu = document.getElementById('actionContextMenu');
+      menu.addEventListener('click', (e) => e.stopPropagation());
+
+      document.getElementById('ctxMoveBtn').addEventListener('click', () => {
+        if (!activeActionTarget) return;
+        const { type, id } = activeActionTarget;
+        closeActionMenu();
+        openTransferModal('move', type, id);
+      });
+
+      document.getElementById('ctxCopyBtn').addEventListener('click', () => {
+        if (!activeActionTarget) return;
+        const { type, id } = activeActionTarget;
+        closeActionMenu();
+        openTransferModal('copy', type, id);
+      });
+
+      document.getElementById('ctxDeleteBtn').addEventListener('click', () => {
+        if (!activeActionTarget) return;
+        const { type, id } = activeActionTarget;
+        closeActionMenu();
+        if (type === 'folder') {
+          deleteFolder(id);
+        } else {
+          deleteFile(id);
+        }
+      });
+
+      const scrollWrap = document.getElementById('fileTableScrollWrap');
+      if (scrollWrap) {
+        scrollWrap.addEventListener('scroll', closeActionMenu, { passive: true });
+      }
+      window.addEventListener('resize', closeActionMenu);
+    }
+
+    function openActionMenu(event, type, id) {
+      event.stopPropagation();
+      if (!requireAuth()) return;
+
+      document.getElementById('addDropdownMenu').classList.add('hidden');
+      const menu = document.getElementById('actionContextMenu');
+
+      // 再次点击同一个按钮则收起菜单
+      if (!menu.classList.contains('hidden') && activeActionTarget && activeActionTarget.type === type && activeActionTarget.id === id) {
+        closeActionMenu();
+        return;
+      }
+
+      activeActionTarget = { type, id };
+      menu.classList.remove('hidden');
+      lucide.createIcons();
+
+      const btnRect = event.currentTarget.getBoundingClientRect();
+      const menuWidth = menu.offsetWidth || 144;
+      const menuHeight = menu.offsetHeight || 124;
+
+      let left = btnRect.right - menuWidth;
+      if (left < 8) left = 8;
+
+      // 若底部空间不足，自动向上弹出防遮挡
+      let top = btnRect.bottom + 4;
+      if (top + menuHeight > window.innerHeight - 12) {
+        top = Math.max(8, btnRect.top - menuHeight - 4);
+      }
+
+      menu.style.left = `${left}px`;
+      menu.style.top = `${top}px`;
+    }
+
+    function closeActionMenu() {
+      const menu = document.getElementById('actionContextMenu');
+      if (menu) menu.classList.add('hidden');
+      activeActionTarget = null;
     }
 
     // 打开系统设置弹窗（默认折叠导入/导出与危险区子面板）
@@ -992,12 +1077,28 @@
       return `${baseName} #${counter}`;
     }
 
-    // 获取同一文件夹内不重名的文件名称（重名则自动追加 #1, #2...）
-    function getUniqueFileName(baseName, driveId, folderId, targetFileList) {
+    // 获取同一目录下不重名的文件夹名称（仅当 driveId 与 parentId 均相同时才追加 #1, #2...）
+    function getUniqueFolderName(baseName, driveId, parentId, targetFolderList, excludeId = null) {
+      const normalizedParentId = parentId || null;
+      const existingNames = new Set(
+        targetFolderList
+          .filter(f => f.id !== excludeId && f.driveId === driveId && (f.parentId || null) === normalizedParentId)
+          .map(f => f.name)
+      );
+      if (!existingNames.has(baseName)) return baseName;
+      let counter = 1;
+      while (existingNames.has(`${baseName} #${counter}`)) {
+        counter++;
+      }
+      return `${baseName} #${counter}`;
+    }
+
+    // 获取同一文件夹内不重名的文件名称（仅当 driveId 与 folderId 均相同时才追加 #1, #2...）
+    function getUniqueFileName(baseName, driveId, folderId, targetFileList, excludeId = null) {
       const normalizedFolderId = folderId || null;
       const existingNames = new Set(
         targetFileList
-          .filter(f => f.driveId === driveId && (f.folderId || null) === normalizedFolderId)
+          .filter(f => f.id !== excludeId && f.driveId === driveId && (f.folderId || null) === normalizedFolderId)
           .map(f => f.name)
       );
       if (!existingNames.has(baseName)) return baseName;
@@ -1626,7 +1727,264 @@
       return result;
     }
 
-    // 文件夹逻辑
+    // ==========================================
+    // 迁移 / 复制（Move & Copy）位置选择与执行逻辑
+    // ==========================================
+
+    function openTransferModal(mode, type, id) {
+      if (!requireAuth()) return;
+      if (drives.length === 0) return window.showToast('暂无可用网盘', 'warning');
+
+      const item = type === 'folder'
+        ? folders.find(f => f.id === id)
+        : files.find(f => f.id === id);
+      if (!item) return;
+
+      transferState = { mode, type, id };
+
+      const isMove = mode === 'move';
+      const typeLabel = type === 'folder' ? '文件夹' : '文件';
+
+      const iconBox = document.getElementById('transferModalIconBox');
+      const iconEl = document.getElementById('transferModalIcon');
+      const confirmBtn = document.getElementById('transferConfirmBtn');
+
+      if (isMove) {
+        iconBox.className = 'p-2 rounded-xl bg-indigo-50 text-indigo-600 shrink-0';
+        iconEl.setAttribute('data-lucide', 'folder-input');
+        confirmBtn.className = 'px-3.5 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm';
+        confirmBtn.innerText = '确认迁移';
+      } else {
+        iconBox.className = 'p-2 rounded-xl bg-emerald-50 text-emerald-600 shrink-0';
+        iconEl.setAttribute('data-lucide', 'copy');
+        confirmBtn.className = 'px-3.5 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm';
+        confirmBtn.innerText = '确认复制';
+      }
+
+      document.getElementById('transferModalTitle').innerText = `${isMove ? '迁移' : '复制'}${typeLabel}：${item.name}`;
+      const currentPath = type === 'folder' ? getFullFolderPath(item) : `${getFullFilePath(item)}/${item.name}`.replace('//', '/');
+      document.getElementById('transferModalSubtitle').innerText = `当前位置：${currentPath}`;
+
+      const driveSelect = document.getElementById('transferDriveSelect');
+      driveSelect.innerHTML = drives.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
+      driveSelect.value = item.driveId;
+
+      updateTransferFolderOptions();
+      const defaultTargetFolderId = type === 'folder' ? (item.parentId || '') : (item.folderId || '');
+      document.getElementById('transferFolderSelect').value = defaultTargetFolderId;
+
+      openModal('transferModal');
+    }
+
+    function updateTransferFolderOptions() {
+      if (!transferState) return;
+      const targetDriveId = document.getElementById('transferDriveSelect').value;
+      const folderSelect = document.getElementById('transferFolderSelect');
+
+      // 迁移或复制文件夹时，排除自身及其所有后代子文件夹
+      let excludedIds = [];
+      if (transferState.type === 'folder') {
+        excludedIds = [transferState.id, ...getDescendantFolderIds(transferState.id)];
+      }
+
+      const availableFolders = folders.filter(
+        f => f.driveId === targetDriveId && !excludedIds.includes(f.id)
+      );
+
+      folderSelect.innerHTML = `<option value="">根目录</option>` +
+        availableFolders.map(f => `<option value="${f.id}">${escapeHtml(getFolderPath(f.id))}</option>`).join('');
+    }
+
+    function formatDestinationLabel(driveId, folderId) {
+      const drive = drives.find(d => d.id === driveId);
+      const driveName = drive ? drive.name : '目标网盘';
+      if (!folderId) return `${driveName} (根目录)`;
+      return `${driveName}/${getFolderPath(folderId)}`;
+    }
+
+    function executeTransferAction() {
+      if (!requireAuth() || !transferState) return;
+      const { mode, type, id } = transferState;
+      const targetDriveId = document.getElementById('transferDriveSelect').value;
+      const targetFolderId = document.getElementById('transferFolderSelect').value || null;
+      const destLabel = formatDestinationLabel(targetDriveId, targetFolderId);
+
+      // 分支 A：迁移 / 复制单个文件
+      if (type === 'file') {
+        const file = files.find(f => f.id === id);
+        if (!file) return;
+
+        if (mode === 'move') {
+          if (file.driveId === targetDriveId && (file.folderId || null) === targetFolderId) {
+            closeModal('transferModal');
+            window.showToast('文件已在目标位置，无需迁移', 'info');
+            return;
+          }
+
+          // 仅当目标位置存在同名文件时才追加 #1 编号
+          const finalName = getUniqueFileName(file.name, targetDriveId, targetFolderId, files, file.id);
+          const updatedFile = {
+            ...file,
+            name: finalName,
+            driveId: targetDriveId,
+            folderId: targetFolderId
+          };
+          const idx = files.findIndex(f => f.id === file.id);
+          files[idx] = updatedFile;
+
+          closeModal('transferModal');
+          transferState = null;
+          commitCloudChanges({ upserts: { files: [updatedFile] } }).then(ok => {
+            if (ok) window.showToast(`已迁移至 ${destLabel}`, 'success');
+          });
+        } else {
+          // 复制文件：同目录重名才追加 #1，不同目录保持原名
+          const copiedName = getUniqueFileName(file.name, targetDriveId, targetFolderId, files);
+          const copiedFile = {
+            id: generateUniqueId(),
+            name: copiedName,
+            size: file.size || '',
+            driveId: targetDriveId,
+            folderId: targetFolderId,
+            note: file.note || ''
+          };
+          files.push(copiedFile);
+
+          closeModal('transferModal');
+          transferState = null;
+          commitCloudChanges({ upserts: { files: [copiedFile] } }).then(ok => {
+            if (ok) window.showToast(`已复制至 ${destLabel}`, 'success');
+          });
+        }
+        return;
+      }
+
+      // 分支 B：迁移 / 复制文件夹（含全部子文件夹与内部文件）
+      if (type === 'folder') {
+        const rootFolder = folders.find(f => f.id === id);
+        if (!rootFolder) return;
+
+        const descendantFolderIds = getDescendantFolderIds(rootFolder.id);
+        const subtreeFolderIds = [rootFolder.id, ...descendantFolderIds];
+
+        if (mode === 'move') {
+          if (rootFolder.driveId === targetDriveId && (rootFolder.parentId || null) === targetFolderId) {
+            closeModal('transferModal');
+            window.showToast('文件夹已在目标位置，无需迁移', 'info');
+            return;
+          }
+
+          // 仅当目标位置存在同名文件夹时才追加 #1 编号
+          const finalRootName = getUniqueFolderName(
+            rootFolder.name,
+            targetDriveId,
+            targetFolderId,
+            folders,
+            rootFolder.id
+          );
+
+          const upsertedFolders = [];
+          const upsertedFiles = [];
+
+          // 1. 更新根文件夹及所有后代子文件夹的 driveId（根文件夹同步更新 parentId 与可能去重的 name）
+          folders = folders.map(f => {
+            if (f.id === rootFolder.id) {
+              const updated = {
+                ...f,
+                name: finalRootName,
+                driveId: targetDriveId,
+                parentId: targetFolderId
+              };
+              upsertedFolders.push(updated);
+              return updated;
+            }
+            if (descendantFolderIds.includes(f.id)) {
+              const updated = { ...f, driveId: targetDriveId };
+              upsertedFolders.push(updated);
+              return updated;
+            }
+            return f;
+          });
+
+          // 2. 级联更新该文件夹树内部所有文件的 driveId
+          files = files.map(file => {
+            if (file.folderId && subtreeFolderIds.includes(file.folderId)) {
+              const updated = { ...file, driveId: targetDriveId };
+              upsertedFiles.push(updated);
+              return updated;
+            }
+            return file;
+          });
+
+          // 若当前正处于被迁移的子树目录内部，且迁移到了另一网盘，同步更新当前网盘上下文避免面包屑失联
+          if (currentSelectedFolderId && subtreeFolderIds.includes(currentSelectedFolderId)) {
+            currentSelectedDriveId = targetDriveId;
+          }
+
+          closeModal('transferModal');
+          transferState = null;
+          commitCloudChanges({
+            upserts: { folders: upsertedFolders, files: upsertedFiles }
+          }).then(ok => {
+            if (ok) window.showToast(`已迁移文件夹至 ${destLabel}`, 'success');
+          });
+        } else {
+          // 递归深拷贝整个文件夹子树（重新生成全套文件夹与文件 ID）
+          const folderIdMap = new Map();
+          subtreeFolderIds.forEach(oldId => {
+            folderIdMap.set(oldId, generateUniqueId());
+          });
+
+          const finalRootName = getUniqueFolderName(
+            rootFolder.name,
+            targetDriveId,
+            targetFolderId,
+            folders
+          );
+
+          const clonedFolders = [];
+          const clonedFiles = [];
+
+          subtreeFolderIds.forEach(oldId => {
+            const origFolder = folders.find(f => f.id === oldId);
+            if (!origFolder) return;
+            const isRoot = oldId === rootFolder.id;
+            clonedFolders.push({
+              id: folderIdMap.get(oldId),
+              driveId: targetDriveId,
+              parentId: isRoot ? targetFolderId : folderIdMap.get(origFolder.parentId),
+              name: isRoot ? finalRootName : origFolder.name
+            });
+          });
+
+          files.forEach(origFile => {
+            if (origFile.folderId && folderIdMap.has(origFile.folderId)) {
+              clonedFiles.push({
+                id: generateUniqueId(),
+                name: origFile.name,
+                size: origFile.size || '',
+                driveId: targetDriveId,
+                folderId: folderIdMap.get(origFile.folderId),
+                note: origFile.note || ''
+              });
+            }
+          });
+
+          folders.push(...clonedFolders);
+          files.push(...clonedFiles);
+
+          closeModal('transferModal');
+          transferState = null;
+          commitCloudChanges({
+            upserts: { folders: clonedFolders, files: clonedFiles }
+          }).then(ok => {
+            if (ok) window.showToast(`已复制文件夹至 ${destLabel}`, 'success');
+          });
+        }
+      }
+    }
+
+    // 文件夹逻辑（新建含路径选择；编辑仅修改名称）
     function openFolderModal(folderId = null) {
       if (!requireAuth()) return;
       if (drives.length === 0) return window.showToast('请先添加至少一个网盘', 'warning');
@@ -1716,12 +2074,14 @@
       }
     }
 
-    // 文件逻辑
+    // 文件逻辑（新建含路径选择；编辑仅修改名称、体积、备注）
     function openFileModal(fileId = null) {
       if (!requireAuth()) return;
       if (drives.length === 0) return window.showToast('请先添加至少一个网盘', 'warning');
       const driveSelect = document.getElementById('fileDriveSelect');
       driveSelect.innerHTML = drives.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
+
+      const locationBox = document.getElementById('fileLocationFields');
 
       if (fileId) {
         const file = files.find(f => f.id === fileId);
@@ -1730,15 +2090,14 @@
         document.getElementById('fileNameInput').value = file.name;
         document.getElementById('fileSizeInput').value = file.size;
         document.getElementById('fileNoteInput').value = file.note || '';
-        driveSelect.value = file.driveId;
-        updateFileFolderOptions();
-        document.getElementById('fileFolderSelect').value = file.folderId || '';
+        locationBox.classList.add('hidden');
       } else {
         document.getElementById('fileModalTitle').innerText = '添加文件';
         document.getElementById('editFileId').value = '';
         document.getElementById('fileNameInput').value = '';
         document.getElementById('fileSizeInput').value = '';
         document.getElementById('fileNoteInput').value = '';
+        locationBox.classList.remove('hidden');
         if (currentSelectedDriveId) {
           driveSelect.value = currentSelectedDriveId;
         }
@@ -1762,8 +2121,6 @@
       const id = document.getElementById('editFileId').value;
       const name = document.getElementById('fileNameInput').value.trim();
       const size = document.getElementById('fileSizeInput').value.trim();
-      const driveId = document.getElementById('fileDriveSelect').value;
-      const folderId = document.getElementById('fileFolderSelect').value || null;
       const note = document.getElementById('fileNoteInput').value.trim();
 
       if (!name) return window.showToast('请输入文件名称', 'warning');
@@ -1771,9 +2128,12 @@
       let savedFile;
       if (id) {
         const index = files.findIndex(f => f.id === id);
-        savedFile = { ...files[index], name, size, driveId, folderId, note };
+        if (index === -1) return;
+        savedFile = { ...files[index], name, size, note };
         files[index] = savedFile;
       } else {
+        const driveId = document.getElementById('fileDriveSelect').value;
+        const folderId = document.getElementById('fileFolderSelect').value || null;
         savedFile = { id: generateUniqueId(), name, size, driveId, folderId, note };
         files.push(savedFile);
       }
@@ -1959,7 +2319,6 @@
       }
     }
 
-    // 修改 logoutGoogle 中的监听器清理调用
     window.logoutGoogle = async () => {
       try {
         clearCloudListeners();
