@@ -9,16 +9,6 @@
   <!-- 引入 Lucide 图标库 -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-    /* 辅助样式：隐藏折叠状态下的文本 */
-    .collapsed .nav-text,
-    .collapsed .nav-header {
-      display: none !important;
-    }
-    .collapsed .nav-item {
-      justify-content: center !important;
-      padding-left: 0 !important;
-      padding-right: 0 !important;
-    }
     /* 隐藏面包屑横向滚动条 */
     .no-scrollbar::-webkit-scrollbar {
       display: none;
@@ -33,8 +23,13 @@
 
   <!-- 顶栏：Win11 资源管理器风格工具栏 -->
   <header class="bg-white border-b border-slate-200 px-3 sm:px-4 py-2 flex items-center justify-between gap-2 sm:gap-3 shrink-0 shadow-sm">
-    <!-- 左侧：应用标识、返回上一级与可交互面包屑路径 -->
+    <!-- 左侧：展开侧边栏按钮、应用标识、返回上一级与可交互面包屑路径 -->
     <div class="flex items-center gap-1.5 sm:gap-2.5 min-w-0 flex-1">
+      <!-- 侧边栏隐藏时显示的左上角展开按钮 -->
+      <button id="expandSidebarBtn" onclick="toggleSidebar()" class="hidden p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all shrink-0" title="展开侧边栏">
+        <i data-lucide="chevron-right" class="w-4 h-4"></i>
+      </button>
+
       <div class="flex items-center gap-2 pr-2 sm:pr-3 border-r border-slate-200 shrink-0">
         <i data-lucide="hard-drive" class="w-6 h-6 text-indigo-600"></i>
         <span class="font-bold text-slate-900 hidden md:inline text-sm">网盘资源管理器</span>
@@ -99,15 +94,15 @@
   <!-- 主内容区：左侧导航栏 + 右侧主工作区 -->
   <div class="flex-1 flex overflow-hidden">
 
-    <!-- 左侧导航栏 (支持收起/展开，全设备通用) -->
-    <aside id="sidebar" class="w-60 bg-slate-50 border-r border-slate-200 p-2 sm:p-3 flex flex-col justify-between overflow-y-auto shrink-0 transition-all duration-300 ease-in-out">
+    <!-- 左侧导航栏 (点击 < 后完全隐藏，释放移动端横向空间) -->
+    <aside id="sidebar" class="w-56 sm:w-60 bg-slate-50 border-r border-slate-200 p-2 sm:p-3 flex flex-col justify-between overflow-y-auto shrink-0">
       <div class="space-y-4">
         
-        <!-- 折叠控制顶栏 (放置 < 与 > 按钮) -->
-        <div class="flex items-center justify-between px-1 mb-1">
+        <!-- 折叠控制顶栏 (收起按钮右对齐) -->
+        <div class="flex items-center justify-between pl-2 pr-1 mb-1">
           <span class="nav-header text-[11px] font-semibold text-slate-400 uppercase tracking-wider">导航目录</span>
-          <button id="toggleSidebarBtn" onclick="toggleSidebar()" class="p-1.5 rounded-lg hover:bg-slate-200/70 text-slate-500 hover:text-indigo-600 transition-all mx-auto" title="展开/折叠侧边栏">
-            <i id="toggleSidebarIcon" data-lucide="chevron-left" class="w-4 h-4"></i>
+          <button id="toggleSidebarBtn" onclick="toggleSidebar()" class="p-1.5 rounded-lg hover:bg-slate-200/70 text-slate-500 hover:text-indigo-600 transition-all" title="收起侧边栏">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
           </button>
         </div>
 
@@ -128,9 +123,9 @@
 
         <!-- 已注册网盘树形列表 -->
         <div>
-          <div class="nav-header flex items-center justify-between px-2 mb-1.5">
+          <div class="nav-header flex items-center justify-between pl-2 pr-1 mb-1.5">
             <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">已挂载网盘</span>
-            <button onclick="openDriveModal()" class="text-slate-400 hover:text-indigo-600" title="添加网盘"><i data-lucide="plus" class="w-3.5 h-3.5"></i></button>
+            <button onclick="openDriveModal()" class="p-1 rounded hover:bg-slate-200/70 text-slate-400 hover:text-indigo-600 transition-colors" title="添加网盘"><i data-lucide="plus" class="w-3.5 h-3.5"></i></button>
           </div>
           <nav id="sidebarDriveList" class="space-y-1">
             <!-- JS 动态渲染网盘树状列表 -->
@@ -690,30 +685,34 @@
 
     // 初始化
     document.addEventListener('DOMContentLoaded', () => {
+      // 移动端默认自动收起侧边栏，最大化文件列表可视区域
+      if (window.innerWidth < 640) {
+        applySidebarState(true);
+      }
       lucide.createIcons();
       window.renderAll();
       initDropdown();
       initActionContextMenu();
     });
 
-    // 切换侧边栏折叠/展开
-    function toggleSidebar() {
+    // 应用侧边栏显隐状态
+    function applySidebarState(collapsed) {
       const sidebar = document.getElementById('sidebar');
-      const icon = document.getElementById('toggleSidebarIcon');
-
-      isSidebarCollapsed = !isSidebarCollapsed;
+      const expandBtn = document.getElementById('expandSidebarBtn');
+      isSidebarCollapsed = collapsed;
 
       if (isSidebarCollapsed) {
-        sidebar.classList.remove('w-60');
-        sidebar.classList.add('w-14', 'collapsed');
-        icon.setAttribute('data-lucide', 'chevron-right');
+        sidebar.classList.add('hidden');
+        expandBtn.classList.remove('hidden');
       } else {
-        sidebar.classList.remove('w-14', 'collapsed');
-        sidebar.classList.add('w-60');
-        icon.setAttribute('data-lucide', 'chevron-left');
+        sidebar.classList.remove('hidden');
+        expandBtn.classList.add('hidden');
       }
+    }
 
-      lucide.createIcons();
+    // 切换侧边栏收起/展开
+    function toggleSidebar() {
+      applySidebarState(!isSidebarCollapsed);
     }
 
     // 刷新本地视图并将增量变更（upserts / deletes）批量提交至云端子集合
@@ -784,6 +783,8 @@
 
       document.getElementById('addDropdownMenu').classList.add('hidden');
       const menu = document.getElementById('actionContextMenu');
+      const triggerBtn = event.currentTarget || event.target.closest('button');
+      if (!triggerBtn) return;
 
       // 再次点击同一个按钮则收起菜单
       if (!menu.classList.contains('hidden') && activeActionTarget && activeActionTarget.type === type && activeActionTarget.id === id) {
@@ -792,10 +793,9 @@
       }
 
       activeActionTarget = { type, id };
+      const btnRect = triggerBtn.getBoundingClientRect();
       menu.classList.remove('hidden');
-      lucide.createIcons();
 
-      const btnRect = event.currentTarget.getBoundingClientRect();
       const menuWidth = menu.offsetWidth || 144;
       const menuHeight = menu.offsetHeight || 124;
 
