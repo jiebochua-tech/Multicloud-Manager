@@ -1,25 +1,14 @@
 <!DOCTYPE html>
-<html lang="zh-CN" class="h-full overflow-hidden">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>多网盘索引管理系统 - 资源管理器风格</title>
   <!-- 引入 Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- 引入 Lucide 图标库 -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-    html, body {
-      height: 100%;
-      height: 100dvh;
-      max-height: 100dvh;
-      overflow: hidden;
-    }
-    /* 平板与移动端触控平滑滚动强化 */
-    .touch-scroll {
-      -webkit-overflow-scrolling: touch;
-      overscroll-behavior-y: contain;
-    }
     /* 隐藏面包屑横向滚动条 */
     .no-scrollbar::-webkit-scrollbar {
       display: none;
@@ -30,7 +19,7 @@
     }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 h-full h-[100dvh] flex flex-col font-sans overflow-hidden select-none">
+<body class="bg-slate-100 text-slate-800 h-screen flex flex-col font-sans overflow-hidden select-none">
 
   <!-- 顶栏：Win11 资源管理器风格工具栏 -->
   <header class="bg-white border-b border-slate-200 px-3 sm:px-4 py-2 flex items-center justify-between gap-2 sm:gap-3 shrink-0 shadow-sm">
@@ -103,10 +92,10 @@
   </header>
 
   <!-- 主内容区：左侧导航栏 + 右侧主工作区 -->
-  <div class="flex-1 min-h-0 flex overflow-hidden">
+  <div class="flex-1 flex overflow-hidden">
 
     <!-- 左侧导航栏 (点击 < 后完全隐藏，释放移动端横向空间) -->
-    <aside id="sidebar" class="w-56 sm:w-60 bg-slate-50 border-r border-slate-200 p-2 sm:p-3 flex flex-col justify-between overflow-y-auto touch-scroll shrink-0">
+    <aside id="sidebar" class="w-56 sm:w-60 bg-slate-50 border-r border-slate-200 p-2 sm:p-3 flex flex-col justify-between overflow-y-auto shrink-0">
       <div class="space-y-4">
         
         <!-- 折叠控制顶栏 (收起按钮右对齐) -->
@@ -152,14 +141,14 @@
     </aside>
 
     <!-- 右侧工作区 -->
-    <main class="flex-1 min-h-0 bg-white overflow-hidden flex flex-col min-w-0">
+    <main class="flex-1 bg-white overflow-y-auto flex flex-col min-w-0">
 
       <!-- 视图 1：文件与文件夹混合列表视图 (Win11 File List UI) -->
-      <div id="viewFiles" class="flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div id="fileTableScrollWrap" class="overflow-auto touch-scroll flex-1 min-h-0 pb-4">
+      <div id="viewFiles" class="flex-1 flex flex-col">
+        <div id="fileTableScrollWrap" class="overflow-x-auto flex-1">
           <table class="w-full text-left border-collapse min-w-[580px]">
-            <thead class="sticky top-0 z-10 bg-slate-50 shadow-[0_1px_0_0_rgb(226,232,240)]">
-              <tr class="text-xs font-medium text-slate-500">
+            <thead>
+              <tr class="border-b border-slate-200 bg-slate-50/50 text-xs font-medium text-slate-500">
                 <th class="py-2.5 px-4 font-semibold">Name (名称)</th>
                 <th class="py-2.5 px-4 font-semibold w-32 sm:w-36">Type (类型)</th>
                 <th class="py-2.5 px-4 font-semibold w-24 sm:w-28">Size (大小)</th>
@@ -181,7 +170,7 @@
       </div>
 
       <!-- 视图 2：网盘管理视图 (Dashboard UI) -->
-      <div id="viewDrives" class="hidden p-4 sm:p-6 space-y-6 flex-1 min-h-0 overflow-y-auto touch-scroll">
+      <div id="viewDrives" class="hidden p-4 sm:p-6 space-y-6 flex-1">
         <!-- 统计指标卡片组 -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center gap-4">
