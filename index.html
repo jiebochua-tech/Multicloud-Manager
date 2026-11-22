@@ -2290,15 +2290,6 @@
       }
 
       window.renderAll();
-    }
-
-      const now = new Date();
-      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-      document.getElementById('lastSyncTimeText').innerText = `云端已同步 (${timeStr})`;
-      document.getElementById('syncBadgeText').innerText = '实时同步';
-
-      window.renderAll();
-  }
 
     // 自动迁移旧版单文档 (users/{uid}) 数据至子集合（兼容平滑升级）
     async function migrateLegacySingleDocIfNeeded(uid) {
@@ -2342,69 +2333,53 @@
     };
 
     // 实时监听登录态与三张 Firestore 子集合变化
-    onAuthStateChanged(auth, (user) => {
-            const loggedOutView = document.getElementById('logged-out-view');
-            const loggedInView = document.getElementById('logged-in-view');
-            const userInfoEl = document.getElementById('user-info');
-            const avatarImg = document.getElementById('user-avatar-img');
-            const avatarFallback = document.getElementById('user-avatar-fallback');
+    onAuthStateChanged(auth, async (user) => {
+      clearCloudListeners();
 
-            if (user) {
-                window.currentUser = user;
-                if (loggedOutView) loggedOutView.classList.add('hidden');
-                if (loggedInView) loggedInView.classList.remove('hidden');
+      if (user) {
+        window.currentUser = user;
+        updateAuthUI(user);
+        window.showToast(`欢迎回来，${user.displayName || user.email}`, 'success');
 
-                // 显示用户名（优先显示 Google 昵称，其次邮箱）
-                const displayName = user.displayName || user.email || '已登入用户';
-                if (userInfoEl) {
-                    userInfoEl.innerText = displayName;
-                    userInfoEl.title = user.email ? `${displayName} (${user.email})` : displayName;
-                }
+        rawCloudState = { drives: [], folders: [], files: [] };
+        const subNames = ['drives', 'folders', 'files'];
 
-                // 设置用户头像（若无头像或图片加载失败则显示默认人像 SVG）
-                if (avatarImg && avatarFallback) {
-                    if (user.photoURL) {
-                        avatarImg.onload = () => {
-                            avatarImg.classList.remove('hidden');
-                            avatarFallback.classList.add('hidden');
-                        };
-                        avatarImg.onerror = () => {
-                            avatarImg.classList.add('hidden');
-                            avatarFallback.classList.remove('hidden');
-                        };
-                        avatarImg.src = user.photoURL;
-                    } else {
-                        avatarImg.src = '';
-                        avatarImg.classList.add('hidden');
-                        avatarFallback.classList.remove('hidden');
-                    }
-                }
-
-                onSnapshot(doc(db, "users", user.uid), (docSnap) => {
-                    if (docSnap.exists()) {
-                        window.records = docSnap.data().records || [];
-                    } else {
-                        window.records = [];
-                    }
-                    if (window.renderTable) window.renderTable();
-                });
-            } else {
-                window.currentUser = null;
-                window.records = [];
-                if (loggedOutView) loggedOutView.classList.remove('hidden');
-                if (loggedInView) loggedInView.classList.add('hidden');
-                if (avatarImg) {
-                    avatarImg.src = '';
-                    avatarImg.classList.add('hidden');
-                }
-                if (avatarFallback) avatarFallback.classList.remove('hidden');
-
-                if (window.renderTable) window.renderTable();
-                window.showToast("未登录：请登录 Google 账号以同步云端数据", "info");
+        subNames.forEach(colName => {
+          const colRef = collection(db, 'users', user.uid, colName);
+          const unsub = onSnapshot(
+            colRef,
+            (querySnap) => {
+              rawCloudState[colName] = querySnap.docs.map(d => ({ id: d.id, ...d.data() }));
+              syncFromSubCollections();
+            },
+            (error) => {
+              console.error(`Firestore [${colName}] 监听异常:`, error);
+              if (error.code === 'permission-denied') {
+                window.showToast('云端读取权限被拒绝，请检查 Firestore 子集合安全规则', 'error');
+              } else {
+                window.showToast('云端同步连接中断，请检查网络', 'error');
+              }
             }
+          );
+          unsubscribeListeners.push(unsub);
         });
 
-    // 分片批量写入/删除子集合文档（每批上限 450 条，规避 Firestore 500 条限制）
+        await migrateLegacySingleDocIfNeeded(user.uid);
+      } else {
+        window.currentUser = null;
+        rawCloudState = { drives: [], folders: [], files: [] };
+        drives = [];
+        folders = [];
+        files = [];
+        currentSelectedDriveId = null;
+        currentSelectedFolderId = null;
+        updateAuthUI(null);
+        window.renderAll();
+        window.showToast('未登录：请前往系统设置登录 Google 账号', 'info');
+      }
+    });
+
+    // 分片批量写入/删除子集合文档
     window.applyCloudBatch = async function({ upserts = {}, deletes = {} } = {}) {
       if (!window.currentUser) {
         window.showToast('请先登录 Google 账号！', 'error');
@@ -2430,7 +2405,6 @@
 
       if (operations.length === 0) return true;
 
-      document.getElementById('syncBadgeText').innerText = '同步中...';
       try {
         const CHUNK_SIZE = 450;
         for (let i = 0; i < operations.length; i += CHUNK_SIZE) {
@@ -2445,7 +2419,6 @@
         return true;
       } catch (error) {
         console.error('云端批量同步失败:', error);
-        document.getElementById('syncBadgeText').innerText = '同步失败';
         window.showToast('云同步失败，请检查网络或 Firestore 子集合规则', 'error');
         return false;
       }
