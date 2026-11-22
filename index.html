@@ -2276,7 +2276,7 @@
     }
 
     // 合并三张子集合快照并刷新界面（移除已废弃的 DOM 赋值，避免报错）
-    function syncFromSubCollections() {
+    function syncFromSubCollections() 
       const norm = normalizeDataset(rawCloudState);
       drives = norm.drives;
       folders = norm.folders;
